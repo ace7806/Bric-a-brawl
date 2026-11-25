@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BRIC-A-BRAWL</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%23F3EDE2'/%3E%3Ccircle cx='32' cy='32' r='26' fill='none' stroke='%2324459A' stroke-width='3.5' stroke-dasharray='5 3'/%3E%3Ccircle cx='32' cy='32' r='20' fill='none' stroke='%23C8A24A' stroke-width='2'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-family='Georgia,serif' font-weight='900' font-size='22' fill='%2324459A'%3EBB%3C/text%3E%3C/svg%3E" />
+  <meta name="description" content="A party fighter for ornaments with grudges. 2 to 8 players, one link, nothing to install. Click to join." />
+  <meta name="theme-color" content="#24459A" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="bric-a-brawl" />
+  <meta property="og:title" content="BRIC-A-BRAWL" />
+  <meta property="og:description" content="A party fighter for ornaments with grudges. 2 to 8 players, one link, nothing to install. Click to join." />
+  <meta property="og:image" content="./og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <style>
+    :root { --paper:#F3EDE2; --ink:#2B2623; --cobalt:#24459A; --gilt:#C8A24A; --stamp:#B5432E; }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--paper); color:var(--ink); font-family:system-ui, sans-serif; }
+    #boot { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:var(--paper); z-index:900; }
+    #boot.hidden { display:none; }
+    #boot-bar { width:220px; height:6px; border:1.5px solid var(--ink); border-radius:4px; overflow:hidden; background:#fff; }
+    #boot-fill { width:15%; height:100%; background:var(--gilt); transition:width 120ms linear; }
+  </style>
+</head>
+<body>
+  <div id="boot">
+    <strong style="font-size:28px;letter-spacing:-0.02em">BRIC-A-BRAWL</strong>
+    <div id="boot-status" style="font-family:monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.12em">Pouring...</div>
+    <div id="boot-bar"><div id="boot-fill"></div></div>
+  </div>
+  <canvas id="stage"></canvas>
+  <div id="ui-root"></div>
+  <script type="module" src="/src/client/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+{
+ "units": "1 unit (u) = 1 metre-ish. A mid fighter is 1.5 u tall. All speeds are u/s, accelerations u/s^2, times are frames at 60 Hz unless marked ms/s.",
+ "tickRate": 60,
+ "net": {
+  "snapshotHz": 30,
+  "worldStateHz": 15,
+  "inputHz": 60,
+  "inputRedundancy": 4,
+  "interpDelayMs": 66,
+  "hostInputJitterBufferTicks": 2,
+  "lagCompMaxTicks": 8,
+  "defenderGraceMaxTicks": 3,
+  "protocolVersion": 1,
+  "maxPlayers": 8,
+  "maxSpectators": 2
+ },
+ "input": {
+  "actionBufferFrames": 8,
+  "motionWindowFrames": 12,
+  "tapJumpDefault": false,
+  "smashChargeMaxFrames": 60,
+  "smashChargeMaxMult": 1.4
+ },
+ "gravity": 53.6,
+ "kbDecay": 28.0,
+ "launch": {
+  "formula": "L = (BKB + KBG * victimPercentAfterHit / 100) * 2 / (1 + weight)",
+  "tumbleSpeed": 18.0,
+  "diMaxDeg": 15,
+  "bounceRetain": 0.7,
+  "bounceMinSpeed": 16.0,
+  "bounceDamage": 3.0
+ },
+ "hitstun": {
+  "base": 6,
+  "perSpeed": 1.25,
+  "max": 80
+ },
+ "hitstop": {
+  "base": 3,
+  "perDamage": 0.5,
+  "min": 4,
+  "max": 14,
+  "heavyBonus": 2,
+  "finalKoFreeze": 24,
+  "finalKoSlowmoFrames": 40,
+  "finalKoSlowmoScale": 0.25
+ },
+ "guard": {
+  "blockstunBase": 3,
+  "blockstunPerDamage": 0.7,
+  "guardDamageMult": 1.0,
+  "heavyGuardDamageMult": 1.2,
+  "drainPerSec": 8,
+  "regenPerSec": 6,
+  "regenDelayFrames": 30,
+  "releaseLag": 8,
+  "pushbackScale": 0.35,
+  "breakStunFrames": 150,
+  "breakStunMinFrames": 90,
+  "breakPopSpeed": 14.0
+ },
+ "parry": {
+  "windowFrames": 5,
+  "cooldownFrames": 30,
+  "attackerStunFrames": 30,
+  "projectileReflectSpeedMult": 1.3,
+  "giltGain": 15
+ },
+ "grab": {
+  "techWindowFrames": 6,
+  "holdBaseFrames": 40,
+  "holdPerPercent": 0.5,
+  "holdMaxFrames": 100,
+  "regrabImmunityFrames": 60
+ },
+ "dodge": {
+  "roll": {
+   "distance": 4.0,
+   "total": 28,
+   "invuln": [
+    4,
+    14
+   ]
+  },
+  "spot": {
+   "total": 24,
+   "invuln": [
+    3,
+    16
+   ]
+  },
+  "air": {
+   "distance": 3.0,
+   "travelFrames": 14,
+   "total": 28,
+   "invuln": [
+    3,
+    16
+   ],
+   "landingLag": 10,
+   "slideRetain": 0.6,
+   "perAirtime": 1
+  }
+ },
+ "ledge": {
+  "grabBox": [
+   0.8,
+   1.0
+  ],
+  "invulnFramesFirstGrab": 30,
+  "maxHangSeconds": 3.0,
+  "regrabNoInvuln": true,
+  "getupFrames": 30,
+  "trump": true
+ },
+ "wallJump": {
+  "perAirtime": 1,
+  "speed": [
+   7.0,
+   15.0
+  ]
+ },
+ "gilt": {
+  "max": 100,
+  "gainPerPercentTaken": 1.0,
+  "gainOnStockLost": 25,
+  "gainOnParry": 15,
+  "breakerCost": 100,
+  "breakerInvulnFrames": 12,
+  "breakerRadius": 3.0,
+  "breakerPushSpeed": 16.0
+ },
+ "terrain": {
+  "crackPerImpactSpeed": 1.0,
+  "crackTechMult": 0.5,
+  "crazeWarningSeconds": 6.0,
+  "looseSinkSeconds": 2.5,
+  "looseSinkSpeed": 0.8,
+  "rubblePerChunk": [
+   2,
+   4
+  ],
+  "maxDynamicChunks": 6,
+  "maxRubble": 16,
+  "debrisHitMinSpeed": 9.0,
+  "debrisDamagePerSpeed": 0.6,
+  "debrisBkb": 10,
+  "debrisKbg": 8
+ },
+ "match": {
+  "roundSeconds": 120,
+  "suddenDeathPercent": 150,
+  "hardEndSeconds": 140,
+  "stocks": {
+   "2-4": 3,
+   "5-8": 2
+  },
+  "sessionWinsToTake": 3,
+  "rematchAutoSeconds": 8,
+  "respawnInvulnFrames": 120,
+  "ghostTapCooldownSeconds": 5.0,
+  "ghostTapCrack": 15
+ },
+ "blastZone": {
+  "left": -25,
+  "right": 25,
+  "top": 19,
+  "bottom": -12
+ },
+ "camera": {
+  "fovDeg": 30,
+  "pitchDeg": -7,
+  "minWidth": 16,
+  "maxWidth": 38,
+  "margin": 2.5,
+  "posOmega": 6.0,
+  "zoomOmega": 3.5,
+  "yawMaxDeg": 5,
+  "launchLeanDeg": 2.5,
+  "launchWiden": 0.08
+ }
+}

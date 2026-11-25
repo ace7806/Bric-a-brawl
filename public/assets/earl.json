@@ -1,0 +1,34 @@
+{
+ "asset": "CHR_earl",
+ "generator": "reference/blender/characters.py",
+ "triangles": 5468,
+ "bones": [
+  "earl_body",
+  "earl_footB",
+  "earl_footF",
+  "earl_handB",
+  "earl_handF",
+  "earl_lid"
+ ],
+ "palette": {
+  "0": "trim",
+  "1": "body",
+  "2": "livery",
+  "3": "bone",
+  "4": "ink",
+  "6": "gilt"
+ },
+ "bbox": [
+  [
+   -1.038,
+   -1.006,
+   0.0
+  ],
+  [
+   1.191,
+   1.011,
+   1.605
+  ]
+ ],
+ "bytes": 593648
+}

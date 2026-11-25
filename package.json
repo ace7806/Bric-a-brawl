@@ -1,0 +1,46 @@
+{
+  "name": "bric-a-brawl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit",
+    "lint:arch": "node scripts/check-arch.mjs",
+    "lint:data": "node scripts/check-data-parity.mjs",
+    "assets:lint": "node scripts/check-assets.mjs",
+    "assets": "node scripts/heavy.mjs assets",
+    "audio:build": "npx tsx scripts/build-audio.ts",
+    "check": "node scripts/heavy.mjs check",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "node scripts/heavy.mjs test:integration",
+    "test:full": "node scripts/heavy.mjs test:full",
+    "test:browser": "node scripts/heavy.mjs test:browser",
+    "build": "node scripts/heavy.mjs build",
+    "bots": "node scripts/heavy.mjs bots",
+    "netsim": "node scripts/heavy.mjs netsim",
+    "svg:dump": "node scripts/heavy.mjs svg:dump",
+    "env:report": "node scripts/env-report.mjs",
+    "evidence:verify": "node scripts/verify-evidence.mjs",
+    "size:report": "node scripts/size-report.mjs"
+  },
+  "dependencies": {
+    "@dimforge/rapier2d-deterministic-compat": "0.21.0",
+    "@geckos.io/snapshot-interpolation": "1.1.1",
+    "msgpackr": "2.1.4",
+    "preact": "^11.2.0",
+    "three": "0.187.0",
+    "trystero": "0.27.0",
+    "valibot": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.7",
+    "@types/three": "0.187.0",
+    "fast-check": "^4.11.0",
+    "playwright-core": "1.65.1",
+    "tsx": "4.20.6",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.2"
+  }
+}

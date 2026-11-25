@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BRIC-A-BRAWL · M1 Connection Test</title>
+  <meta name="theme-color" content="#24459A" />
+  <link rel="stylesheet" href="/src/m1/styles.css" />
+</head>
+<body class="paper">
+  <header class="m1-head">
+    <div>
+      <div class="caps">M1 · Connection &amp; Transport Probe</div>
+      <h1 class="display">Bric-a-Brawl · Network Check</h1>
+    </div>
+    <div class="m1-head-actions">
+      <button id="btn-copy" class="btn small" type="button">Copy report</button>
+      <span id="copy-status" class="caps" aria-live="polite"></span>
+    </div>
+  </header>
+
+  <main class="m1-grid">
+    <section class="card" aria-labelledby="room-title">
+      <h2 id="room-title" class="caps">1. Room &amp; Signalling</h2>
+      <div class="row-controls">
+        <label class="field">
+          <span class="caps">Three-word room code</span>
+          <input id="room-input" class="type input" type="text" autocomplete="off" spellcheck="false" />
+        </label>
+        <button id="btn-new-code" class="btn small" type="button">Random code</button>
+        <button id="btn-join" class="btn primary small" type="button">Join room</button>
+        <button id="btn-fail" class="btn stamp-btn small" type="button">Force ICE fail</button>
+        <button id="btn-leave" class="btn small" type="button" disabled>Leave</button>
+      </div>
+      <div class="kv-grid">
+        <div><span class="caps">Share link</span><div id="share-link" class="type mono-wrap">—</div></div>
+        <div><span class="caps">Self peer ID</span><div id="self-id" class="type">—</div></div>
+        <div><span class="caps">Connection state</span><div id="conn-state" class="type">Idle</div></div>
+        <div><span class="caps">Relays open</span><div id="relay-count" class="type">0 of 5</div></div>
+        <div><span class="caps">STUN &amp; NAT hint</span><div id="nat-hint" class="type">Pending</div></div>
+        <div><span class="caps">Time to first peer</span><div id="first-peer-ms" class="type">—</div></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="peers-title">
+      <h2 id="peers-title" class="caps">2. Peers &amp; Unreliable Channel (id=7)</h2>
+      <div id="peers-empty" class="type muted">No peers connected yet. Open this URL in another tab or browser.</div>
+      <table id="peers-table" class="m1-table" hidden>
+        <thead>
+          <tr>
+            <th>Peer</th>
+            <th>Path</th>
+            <th>ICE Candidates</th>
+            <th>Channel</th>
+            <th>Ordered</th>
+            <th>MaxRetransmits</th>
+          </tr>
+        </thead>
+        <tbody id="peers-body"></tbody>
+      </table>
+    </section>
+
+    <section class="card" aria-labelledby="traffic-title">
+      <h2 id="traffic-title" class="caps">3. Traffic Test (16 B @ 60 Hz / 400 B @ 30 Hz, Unreliable)</h2>
+      <div class="row-controls">
+        <button id="btn-traffic" class="btn primary small" type="button" disabled>Start traffic test</button>
+        <span id="traffic-status" class="type">Idle</span>
+      </div>
+      <div class="kv-grid">
+        <div><span class="caps">Role (auto by peerId)</span><div id="traffic-role" class="type">—</div></div>
+        <div><span class="caps">RTT median / p95</span><div id="traffic-rtt" class="type">—</div></div>
+        <div><span class="caps">Jitter (RFC3550)</span><div id="traffic-jitter" class="type">—</div></div>
+        <div><span class="caps">Loss</span><div id="traffic-loss" class="type">—</div></div>
+        <div><span class="caps">Reordered</span><div id="traffic-reorder" class="type">—</div></div>
+        <div><span class="caps">Sent / Received</span><div id="traffic-counts" class="type">0 / 0</div></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hidden-title">
+      <h2 id="hidden-title" class="caps">4. Hidden-Tab Timer Test (Worker vs Main Thread)</h2>
+      <div class="row-controls">
+        <button id="btn-hidden" class="btn small" type="button">Start hidden-tab test</button>
+        <span id="hidden-status" class="type">Idle</span>
+      </div>
+      <p class="hint">Switch to another tab after starting so the browser throttles background timers.</p>
+      <div class="kv-grid">
+        <div><span class="caps">Worker longest gap</span><div id="worker-gap" class="type">—</div></div>
+        <div><span class="caps">Main thread longest gap</span><div id="main-gap" class="type">—</div></div>
+        <div><span class="caps">Worker / Main ticks</span><div id="timer-ticks" class="type">0 / 0</div></div>
+      </div>
+    </section>
+  </main>
+
+  <section id="error-screen" class="error-overlay" hidden aria-live="assertive">
+    <div class="error-card">
+      <div id="error-meta" class="caps">Room —</div>
+      <h2 id="error-headline" class="display">You and the host can't shake hands.</h2>
+      <p id="error-body" class="error-copy">
+        Your network and the host's network both refuse direct connections, so the two of you can't reach each other. Nobody did anything wrong, and this game has no relay server to go through.
+      </p>
+      <div class="error-tips">
+        <div class="caps">If that doesn't work, from most to least likely</div>
+        <ol>
+          <li>Turn off your VPN and reload.</li>
+          <li>Office, university and hotel wifi usually block this. Try your phone's hotspot.</li>
+          <li>Ask someone on home broadband to open the room.</li>
+        </ol>
+      </div>
+      <div class="error-diag">
+        <div class="error-diag-head">
+          <span class="caps">For whoever is helping you</span>
+          <button id="btn-error-copy" class="btn small" type="button">Copy diagnostics</button>
+        </div>
+        <pre id="error-diag-text" class="type"></pre>
+      </div>
+      <div class="row-controls">
+        <button id="btn-error-retry" class="btn primary small" type="button">Try again</button>
+        <button id="btn-error-dismiss" class="btn small" type="button">Dismiss</button>
+      </div>
+    </div>
+  </section>
+
+  <script type="module" src="/src/m1/main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,164 @@
+{
+  "sampleRate": 22050,
+  "roomImpulse": {
+    "durationMs": 250,
+    "decayMs": 75,
+    "seed": 1337
+  },
+  "loudnessTargets": {
+    "effectsLufs": -16.0,
+    "musicLufs": -20.0,
+    "auctioneerLufs": -14.0,
+    "peakCapDbfs": -1.3
+  },
+  "music": {
+    "title": "Tea Service",
+    "bpm": 132,
+    "bars": 16,
+    "beatsPerBar": 4,
+    "scale": "D Dorian",
+    "sampleRate": 22050,
+    "swingRatio": 0.625,
+    "seamMs": 50,
+    "targetMs": 29091,
+    "chordsRootMidi": [
+      38, 43, 38, 43,
+      41, 40, 38, 45,
+      38, 43, 45, 40,
+      41, 43, 45, 38
+    ],
+    "bassOffsets": [0, 7, 12, 10],
+    "melodyNotesMidi": [
+      [62, 65, 69, 72, 74, 72, 69, 65],
+      [67, 71, 74, 72, 71, 69, 67, 65],
+      [62, 64, 65, 69, 72, 71, 69, 65],
+      [67, 69, 71, 74, 72, 71, 67, 64],
+      [65, 69, 72, 76, 74, 72, 69, 65],
+      [64, 67, 71, 74, 72, 71, 67, 64],
+      [62, 65, 69, 72, 71, 69, 65, 64],
+      [69, 72, 76, 74, 72, 71, 69, 67],
+      [62, 69, 74, 72, 71, 69, 67, 65],
+      [67, 74, 72, 71, 69, 67, 65, 64],
+      [69, 72, 76, 79, 76, 74, 72, 69],
+      [64, 67, 71, 76, 74, 72, 71, 67],
+      [65, 69, 74, 76, 77, 76, 74, 72],
+      [67, 71, 74, 79, 77, 76, 74, 71],
+      [64, 69, 72, 76, 74, 72, 69, 67],
+      [62, 65, 69, 74, 72, 69, 65, 62]
+    ],
+    "cupOstinatoMidi": [74, 77, 81, 79, 77, 74, 72, 76]
+  },
+  "sounds": {
+    "0":  { "name": "StepChina",     "family": "ceramic", "bus": "effects", "targetMs": 60,   "kind": "modal",   "material": "cup",   "baseHz": 1850, "decayScale": 0.72, "clickHz": 3600, "clickGain": 0.35 },
+    "1":  { "name": "StepStone",     "family": "wood",    "bus": "effects", "targetMs": 80,   "kind": "modal",   "material": "wood",  "baseHz": 460,  "decayScale": 0.65, "clickHz": 950,  "clickGain": 0.25 },
+    "2":  { "name": "Jump",          "family": "fm",      "bus": "effects", "targetMs": 90,   "kind": "fm",      "f0": 340, "f1": 510, "modRatio": 1.5, "modIdx": 1.1 },
+    "3":  { "name": "DoubleJump",    "family": "fm",      "bus": "effects", "targetMs": 110,  "kind": "fm",      "f0": 440, "f1": 680, "modRatio": 2.0, "modIdx": 1.4, "airHz": 1600, "airGain": 0.22 },
+    "4":  { "name": "Land",          "family": "ceramic", "bus": "effects", "targetMs": 120,  "kind": "modal",   "material": "plate", "baseHz": 1320, "decayScale": 0.95, "clickHz": 3000, "clickGain": 0.32, "subHz0": 160, "subHz1": 75, "subGain": 0.14 },
+    "5":  { "name": "HitLight",      "family": "ceramic", "bus": "effects", "targetMs": 70,   "kind": "modal",   "material": "cup",   "baseHz": 1680, "decayScale": 0.85, "clickHz": 3800, "clickGain": 0.36 },
+    "6":  { "name": "HitMid",        "family": "ceramic", "bus": "effects", "targetMs": 110,  "kind": "doubleModal", "material": "plate", "baseHz": 1240, "baseHz2": 1480, "gapMs": 8, "decayScale": 0.95, "clickHz": 3400, "clickGain": 0.3 },
+    "7":  { "name": "HitHeavy",      "family": "ceramic", "bus": "effects", "targetMs": 220,  "kind": "shatter", "material": "plate", "baseHz": 1350, "pieces": 8,  "spanMs": 190, "noiseHz0": 3600, "noiseHz1": 2200 },
+    "8":  { "name": "Guard",         "family": "wood",    "bus": "effects", "targetMs": 90,   "kind": "modal",   "material": "wood",  "baseHz": 520,  "decayScale": 0.62, "clickHz": 1100, "clickGain": 0.28 },
+    "9":  { "name": "GuardBreak",    "family": "ceramic", "bus": "effects", "targetMs": 350,  "kind": "shatter", "material": "plate", "baseHz": 1420, "pieces": 14, "spanMs": 310, "noiseHz0": 3800, "noiseHz1": 2100 },
+    "10": { "name": "Parry",         "family": "ceramic", "bus": "effects", "targetMs": 1200, "kind": "modal",   "material": "bowl",  "baseHz": 780,  "decayScale": 1.0,  "clickHz": 3900, "clickGain": 0.25 },
+    "11": { "name": "LaunchWhistle", "family": "air",     "bus": "effects", "targetMs": 680,  "kind": "air",     "freq0": 1500, "freq1": 2100, "q": 2.2, "whistle0": 680, "whistle1": 1680, "vibHz": 6.5, "vibDepth": 0.035, "whistleGain": 0.65 },
+    "12": { "name": "KoSmash",       "family": "ceramic", "bus": "effects", "targetMs": 900,  "kind": "shatter", "material": "plate", "baseHz": 1380, "pieces": 40, "spanMs": 760, "noiseHz0": 4100, "noiseHz1": 2300, "subHz0": 190, "subHz1": 68, "subGain": 0.16 },
+    "13": { "name": "EarlPuff",      "family": "air",     "bus": "effects", "targetMs": 300,  "kind": "air",     "freq0": 2100, "freq1": 1050, "q": 1.9 },
+    "14": { "name": "EarlPop",       "family": "ceramic", "bus": "effects", "targetMs": 250,  "kind": "modal",   "material": "cup",   "baseHz": 1760, "decayScale": 1.6, "clickHz": 3400, "clickGain": 0.42 },
+    "15": { "name": "GrogSnort",     "family": "air",     "bus": "effects", "targetMs": 250,  "kind": "air",     "freq0": 1450, "freq1": 920,  "q": 2.4, "flutterHz": 34, "flutterDepth": 0.45 },
+    "16": { "name": "GrogStamp",     "family": "wood",    "bus": "effects", "targetMs": 400,  "kind": "shatter", "material": "wood",  "baseHz": 580,  "pieces": 8,  "spanMs": 300, "noiseHz0": 1350, "noiseHz1": 720, "subHz0": 185, "subHz1": 85, "subGain": 0.16 },
+    "17": { "name": "NestaPop",      "family": "fm",      "bus": "effects", "targetMs": 200,  "kind": "fm",      "f0": 260, "f1": 590, "modRatio": 1.41, "modIdx": 2.1, "modalHz": 720 },
+    "18": { "name": "MossCast",      "family": "air",     "bus": "effects", "targetMs": 250,  "kind": "air",     "freq0": 2500, "freq1": 1200, "q": 1.7, "whistle0": 950, "whistle1": 2100, "vibHz": 0, "vibDepth": 0, "whistleGain": 0.25 },
+    "19": { "name": "Bellows",       "family": "air",     "bus": "effects", "targetMs": 300,  "kind": "air",     "freq0": 1550, "freq1": 850,  "q": 1.8, "flutterHz": 22, "flutterDepth": 0.2 },
+    "20": { "name": "PlungerFire",   "family": "fm",      "bus": "effects", "targetMs": 150,  "kind": "fm",      "f0": 640, "f1": 190, "modRatio": 1.8, "modIdx": 2.4 },
+    "21": { "name": "CorkPop",       "family": "fm",      "bus": "effects", "targetMs": 250,  "kind": "fm",      "f0": 310, "f1": 860, "modRatio": 1.25, "modIdx": 1.9, "airHz": 1700, "airGain": 0.3 },
+    "22": { "name": "ChunkBreak",    "family": "wood",    "bus": "effects", "targetMs": 400,  "kind": "shatter", "material": "wood",  "baseHz": 470,  "pieces": 10, "spanMs": 310, "noiseHz0": 1200, "noiseHz1": 580, "subHz0": 165, "subHz1": 50, "subGain": 0.34 },
+    "23": { "name": "SpoonTink",     "family": "ceramic", "bus": "effects", "targetMs": 200,  "kind": "modal",   "material": "cup",   "baseHz": 2180, "decayScale": 1.8, "clickHz": 4200, "clickGain": 0.28 },
+    "24": { "name": "ClockTick",     "family": "wood",    "bus": "ui",      "targetMs": 80,   "kind": "modal",   "material": "wood",  "baseHz": 680,  "decayScale": 0.55, "clickHz": 1200, "clickGain": 0.25 },
+    "25": { "name": "ClockChime",    "family": "ceramic", "bus": "ui",      "targetMs": 1450, "kind": "modal",   "material": "bowl",  "baseHz": 880,  "decayScale": 1.15, "clickHz": 3400, "clickGain": 0.2 },
+    "26": { "name": "Craze",         "family": "ceramic", "bus": "effects", "targetMs": 1450, "kind": "shatter", "material": "cup",   "baseHz": 1600, "pieces": 18, "spanMs": 1350, "noiseHz0": 3200, "noiseHz1": 4400, "risePitch": 1 },
+    "27": { "name": "Rubble",        "family": "ceramic", "bus": "effects", "targetMs": 80,   "kind": "modal",   "material": "plate", "baseHz": 1420, "decayScale": 0.65, "clickHz": 3200, "clickGain": 0.32 },
+    "28": { "name": "ParcelLand",    "family": "wood",    "bus": "effects", "targetMs": 150,  "kind": "modal",   "material": "wood",  "baseHz": 410,  "decayScale": 0.9,  "clickHz": 900,  "clickGain": 0.35 },
+    "29": { "name": "GadgetTake",    "family": "ceramic", "bus": "effects", "targetMs": 80,   "kind": "doubleModal", "material": "cup", "baseHz": 1920, "baseHz2": 2280, "gapMs": 22, "decayScale": 0.6, "clickHz": 3900, "clickGain": 0.28 },
+    "30": { "name": "CountTick",     "family": "wood",    "bus": "ui",      "targetMs": 80,   "kind": "modal",   "material": "wood",  "baseHz": 720,  "decayScale": 0.52, "clickHz": 1250, "clickGain": 0.24 },
+    "31": { "name": "CountGo",       "family": "wood",    "bus": "ui",      "targetMs": 250,  "kind": "doubleModal", "material": "wood", "baseHz": 540, "baseHz2": 620, "gapMs": 70, "decayScale": 1.1, "clickHz": 1150, "clickGain": 0.3 },
+    "32": { "name": "UiPick",        "family": "wood",    "bus": "ui",      "targetMs": 120,  "kind": "modal",   "material": "wood",  "baseHz": 580,  "decayScale": 0.72, "clickHz": 1100, "clickGain": 0.28 },
+    "33": { "name": "UiCopy",        "family": "ceramic", "bus": "ui",      "targetMs": 300,  "kind": "modal",   "material": "bell",  "baseHz": 1520, "decayScale": 1.6,  "clickHz": 3600, "clickGain": 0.24 },
+    "34": { "name": "PlatterOn",     "family": "ceramic", "bus": "ui",      "targetMs": 150,  "kind": "modal",   "material": "plate", "baseHz": 1380, "decayScale": 1.15, "clickHz": 3000, "clickGain": 0.22 },
+    "35": { "name": "PlatterAll",    "family": "ceramic", "bus": "ui",      "targetMs": 500,  "kind": "arpeggio", "material": "cup",  "notesHz": [1174.66, 1396.91, 1760.0], "stepMs": 115, "decayScale": 1.8 },
+    "36": { "name": "GiltFull",      "family": "ceramic", "bus": "effects", "targetMs": 400,  "kind": "modal",   "material": "bell",  "baseHz": 1480, "decayScale": 2.1,  "clickHz": 3800, "clickGain": 0.22 },
+    "37": { "name": "GiltBreak",     "family": "ceramic", "bus": "effects", "targetMs": 600,  "kind": "shatter", "material": "bowl",  "baseHz": 960,  "pieces": 6,  "spanMs": 420, "noiseHz0": 3200, "noiseHz1": 1800 },
+    "38": { "name": "PepperGrind",   "family": "wood",    "bus": "effects", "targetMs": 400,  "kind": "shatter", "material": "wood",  "baseHz": 640,  "pieces": 7,  "spanMs": 340, "noiseHz0": 1300, "noiseHz1": 900 },
+    "39": { "name": "Sneeze",        "family": "air",     "bus": "effects", "targetMs": 200,  "kind": "air",     "freq0": 2400, "freq1": 980,  "q": 1.6, "whistle0": 1420, "whistle1": 780, "vibHz": 0, "vibDepth": 0, "whistleGain": 0.3 },
+    "40": { "name": "ToasterDing",   "family": "ceramic", "bus": "effects", "targetMs": 500,  "kind": "modal",   "material": "bell",  "baseHz": 1760, "decayScale": 2.5,  "clickHz": 4000, "clickGain": 0.28 },
+    "41": { "name": "JamSplat",      "family": "fm",      "bus": "effects", "targetMs": 250,  "kind": "fm",      "f0": 420, "f1": 135, "modRatio": 0.72, "modIdx": 3.4, "airHz": 950, "airGain": 0.32 },
+    "42": { "name": "TimerRewind",   "family": "ceramic", "bus": "effects", "targetMs": 350,  "kind": "shatter", "material": "cup",   "baseHz": 1720, "pieces": 10, "spanMs": 260, "noiseHz0": 3400, "noiseHz1": 4600, "risePitch": 1 },
+    "43": { "name": "HooverSpit",    "family": "air",     "bus": "effects", "targetMs": 250,  "kind": "air",     "freq0": 1350, "freq1": 850,  "q": 2.1, "whistle0": 520, "whistle1": 980, "vibHz": 0, "vibDepth": 0, "whistleGain": 0.22 },
+    "44": { "name": "MagnetFire",    "family": "ceramic", "bus": "effects", "targetMs": 400,  "kind": "shatter", "material": "cup",   "baseHz": 1520, "pieces": 14, "spanMs": 340, "noiseHz0": 3600, "noiseHz1": 2400 },
+    "45": { "name": "PourWhistle",   "family": "air",     "bus": "effects", "targetMs": 1450, "kind": "air",     "freq0": 1800, "freq1": 2350, "q": 2.5, "whistle0": 1150, "whistle1": 1950, "vibHz": 7.2, "vibDepth": 0.028, "whistleGain": 0.72 },
+    "46": { "name": "BowlSplit",     "family": "wood",    "bus": "effects", "targetMs": 1450, "kind": "shatter", "material": "wood",  "baseHz": 560,  "pieces": 22, "spanMs": 1200, "noiseHz0": 1350, "noiseHz1": 680, "subHz0": 180, "subHz1": 78, "subGain": 0.15 },
+    "47": { "name": "ErrorKnock",    "family": "wood",    "bus": "ui",      "targetMs": 200,  "kind": "modal",   "material": "wood",  "baseHz": 440,  "decayScale": 1.1,  "clickHz": 900,  "clickGain": 0.25 }
+  },
+  "auctioneer": {
+    "0":  { "name": "LotNumber",     "family": "auctioneer", "targetMs": 720,  "gavelCount": 1, "gavelGapMs": 140, "notes": [
+      { "startMs": 15,  "durMs": 180, "f0": 124, "f1": 124, "wah0": 480, "wah1": 940 },
+      { "startMs": 215, "durMs": 250, "f0": 126, "f1": 98,  "wah0": 880, "wah1": 420 }
+    ] },
+    "1":  { "name": "DoIHearAFight", "family": "auctioneer", "targetMs": 920,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 110, "f0": 108, "f1": 114, "wah0": 420, "wah1": 760 },
+      { "startMs": 150, "durMs": 110, "f0": 116, "f1": 122, "wah0": 460, "wah1": 840 },
+      { "startMs": 285, "durMs": 115, "f0": 124, "f1": 132, "wah0": 520, "wah1": 920 },
+      { "startMs": 425, "durMs": 120, "f0": 132, "f1": 142, "wah0": 580, "wah1": 1040 },
+      { "startMs": 575, "durMs": 280, "f0": 140, "f1": 158, "wah0": 620, "wah1": 1180 }
+    ] },
+    "2":  { "name": "Going",         "family": "auctioneer", "targetMs": 780,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 20,  "durMs": 700, "f0": 112, "f1": 156, "wah0": 440, "wah1": 1140 }
+    ] },
+    "3":  { "name": "Gone",          "family": "auctioneer", "targetMs": 540,  "gavelCount": 1, "gavelGapMs": 120, "notes": [
+      { "startMs": 15,  "durMs": 240, "f0": 114, "f1": 92,  "wah0": 820, "wah1": 380 }
+    ] },
+    "4":  { "name": "Withdrawn",     "family": "auctioneer", "targetMs": 760,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 190, "f0": 106, "f1": 104, "wah0": 520, "wah1": 560 },
+      { "startMs": 245, "durMs": 190, "f0": 104, "f1": 102, "wah0": 500, "wah1": 540 },
+      { "startMs": 475, "durMs": 230, "f0": 102, "f1": 96,  "wah0": 480, "wah1": 440 }
+    ] },
+    "5":  { "name": "Pair",          "family": "auctioneer", "targetMs": 760,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 140, "f0": 114, "f1": 128, "wah0": 460, "wah1": 880 },
+      { "startMs": 175, "durMs": 150, "f0": 124, "f1": 138, "wah0": 520, "wah1": 960 },
+      { "startMs": 370, "durMs": 140, "f0": 132, "f1": 146, "wah0": 560, "wah1": 1040 },
+      { "startMs": 530, "durMs": 180, "f0": 142, "f1": 156, "wah0": 620, "wah1": 1140 }
+    ] },
+    "6":  { "name": "Three",         "family": "auctioneer", "targetMs": 860,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 190, "f0": 118, "f1": 134, "wah0": 480, "wah1": 920 },
+      { "startMs": 240, "durMs": 200, "f0": 130, "f1": 148, "wah0": 540, "wah1": 1020 },
+      { "startMs": 480, "durMs": 310, "f0": 140, "f1": 160, "wah0": 600, "wah1": 1180 }
+    ] },
+    "7":  { "name": "LastCall",      "family": "auctioneer", "targetMs": 940,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 20,  "durMs": 230, "f0": 128, "f1": 138, "wah0": 500, "wah1": 940 },
+      { "startMs": 285, "durMs": 590, "f0": 144, "f1": 148, "wah0": 620, "wah1": 1080 }
+    ] },
+    "8":  { "name": "FairWarning",   "family": "auctioneer", "targetMs": 880,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 210, "f0": 148, "f1": 132, "wah0": 980, "wah1": 620 },
+      { "startMs": 265, "durMs": 210, "f0": 130, "f1": 114, "wah0": 860, "wah1": 520 },
+      { "startMs": 515, "durMs": 300, "f0": 114, "f1": 94,  "wah0": 720, "wah1": 400 }
+    ] },
+    "9":  { "name": "Sold",          "family": "auctioneer", "targetMs": 1040, "gavelCount": 3, "gavelGapMs": 145, "notes": [
+      { "startMs": 15,  "durMs": 160, "f0": 122, "f1": 154, "wah0": 480, "wah1": 1120 },
+      { "startMs": 195, "durMs": 280, "f0": 146, "f1": 96,  "wah0": 1040, "wah1": 420 }
+    ] },
+    "10": { "name": "NoSale",        "family": "auctioneer", "targetMs": 1080, "gavelCount": 1, "gavelGapMs": 160, "notes": [
+      { "startMs": 20,  "durMs": 740, "f0": 142, "f1": 92,  "wah0": 920, "wah1": 380 }
+    ] },
+    "11": { "name": "HammerFalls",   "family": "auctioneer", "targetMs": 1980, "gavelCount": 3, "gavelGapMs": 230, "notes": [
+      { "startMs": 15,  "durMs": 130, "f0": 116, "f1": 128, "wah0": 460, "wah1": 860 },
+      { "startMs": 165, "durMs": 130, "f0": 128, "f1": 140, "wah0": 520, "wah1": 940 },
+      { "startMs": 315, "durMs": 130, "f0": 140, "f1": 152, "wah0": 580, "wah1": 1060 },
+      { "startMs": 465, "durMs": 130, "f0": 148, "f1": 136, "wah0": 880, "wah1": 620 },
+      { "startMs": 615, "durMs": 150, "f0": 136, "f1": 156, "wah0": 600, "wah1": 1160 },
+      { "startMs": 790, "durMs": 330, "f0": 152, "f1": 96,  "wah0": 1080, "wah1": 400 }
+    ] },
+    "12": { "name": "NewLot",        "family": "auctioneer", "targetMs": 480,  "gavelCount": 0, "gavelGapMs": 0,   "notes": [
+      { "startMs": 15,  "durMs": 150, "f0": 118, "f1": 136, "wah0": 480, "wah1": 920 },
+      { "startMs": 195, "durMs": 220, "f0": 134, "f1": 146, "wah0": 560, "wah1": 1040 }
+    ] }
+  }
+}

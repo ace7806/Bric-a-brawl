@@ -1,0 +1,62 @@
+{
+  "roomWords": [
+    [
+      "chipped", "glazed", "gilded", "crazed", "mended", "baked", "kiln", "cobalt",
+      "celadon", "bisque", "delft", "basalt", "bone", "cream", "amber", "floral",
+      "fluted", "footed", "handed", "hollow", "inlaid", "lidded", "lustre", "matte",
+      "mottled", "painted", "potted", "rimmed", "ribbed", "scallop", "signed", "slipped",
+      "speckled", "stamped", "steeped", "stone", "striped", "burnished", "tin", "turned",
+      "aged", "antique", "brittle", "buff", "chalk", "crackle", "dainty", "dipped",
+      "fired", "frail", "glossy", "heirloom", "ivory", "kaolin", "majolica", "mint",
+      "ochre", "ornate", "pale", "porcelain", "quaint", "rustic", "satin", "vintage"
+    ],
+    [
+      "gravy", "tea", "sugar", "butter", "cream", "sauce", "soup", "pepper",
+      "mustard", "pickle", "honey", "ginger", "biscuit", "muffin", "egg", "toast",
+      "milk", "coffee", "cocoa", "cider", "punch", "sherry", "brandy", "berry",
+      "lemon", "rose", "willow", "clover", "thistle", "garden", "parlour", "mantel",
+      "cabinet", "dresser", "china", "clay", "potter", "auction", "estate", "parish",
+      "cottage", "manor", "pantry", "larder", "kettle", "scone", "jam", "treacle",
+      "marmalade", "custard", "trifle", "tart", "crumb", "bric", "knick", "curio",
+      "trinket", "keepsake", "relic", "trophy", "medallion", "brooch", "thimble", "bobbin"
+    ],
+    [
+      "boat", "pot", "jug", "cup", "saucer", "plate", "bowl", "dish",
+      "tureen", "pitcher", "ewer", "urn", "vase", "jar", "crock", "stein",
+      "mug", "tankard", "flask", "carafe", "decanter", "cruet", "caster", "shaker",
+      "mill", "caddy", "tin", "box", "tray", "platter", "salver", "stand",
+      "tier", "compote", "chalice", "goblet", "tumbler", "beaker", "basin", "ladle",
+      "spoon", "fork", "tongs", "bell", "clock", "lamp", "sconce", "candlestick",
+      "gnome", "bull", "doll", "hound", "spaniel", "owl", "swan", "duck",
+      "frog", "cat", "hare", "bust", "figure", "plaque", "tile", "teapot"
+    ]
+  ],
+  "lotNames": [
+    "Slightly Chipped Gravy Boat", "Suspicious Tureen", "Unsigned Vase", "Wobbly Egg Cup",
+    "Mismatched Saucer", "Pompous Teapot", "Overfired Jug", "Reluctant Sugar Bowl",
+    "Crazed Milk Pitcher", "Gilded Soup Ladle", "Cracked Butter Dish", "Dusty Mantle Clock",
+    "Third-Best Platter", "Unmarked Creamer", "Stout Basalt Bull", "Nested Matryoshka",
+    "Weathered Garden Gnome", "Chipped Biscuit Barrel", "Bent Silver Tongs", "Hairline Jam Jar",
+    "Retired Salt Cellar", "Lopsided Pepper Mill", "Faded Willow Plate", "Orphaned Lid",
+    "Restored Ewer", "Dented Tea Caddy", "Unprovenanced Urn", "Haughty Candlestick",
+    "Slight-Imperfection Bowl", "Victorian Toast Rack", "Crazed Mustard Pot", "Boisterous Tankard",
+    "Reserved Compote", "Mended Serving Dish", "Tarnished Bell", "Solemn Porcelain Hound",
+    "Smug Staffordshire Cat", "Stiff Ceramic Swan", "Nervous Bone Cup", "Ambitious Cruet",
+    "Heavy Stoneware Crock", "Glazed Marmalade Pot", "Eccentric Tea Cosy", "Frugal Demitasse",
+    "Skeptical Figurine", "Unrestored Majolica", "Bold Celadon Vase", "Tin-Glazed Platter",
+    "Lustreware Mug", "Satin Bisque Bust", "Crackle-Finish Bowl", "Forgotten Parlor Lamp",
+    "Chipped Punch Ladle", "Modest Terracotta Pot", "Proud Gravy Ladle", "Shy Porcelain Owl",
+    "Rowdy Cider Flagon", "Delicate Cake Stand", "Stubborn Doorstop", "Spotted Cream Jug",
+    "Antique Pickle Fork", "Inherited Sconce", "Puzzling Curio", "Last-Call Trinket"
+  ],
+  "quickPhrases": [
+    "Going once!",
+    "Sold!",
+    "Mind the glaze!",
+    "Genuine porcelain!",
+    "Chipped at the rim!",
+    "Reserve not met!",
+    "One more lot!",
+    "Handle with care!"
+  ]
+}
