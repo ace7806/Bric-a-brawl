@@ -1,9 +1,9 @@
 {
-  "generatedAtUtc": "2026-11-25T20:57:08.279Z",
+  "generatedAtUtc": "2026-11-25T22:06:34.035Z",
   "allPassed": true,
   "live": {
     "passed": true,
-    "attackLatencyMs": 321,
+    "attackLatencyMs": 277,
     "attackMove": 1,
     "maxLiveSlashes": 1,
     "heavyChargeAndReleaseVerified": true

@@ -13,6 +13,7 @@ import { applyFighterPose, createFighterAnimRuntime, type BoneSlot, type Fighter
 import { HostSimulation } from '@host/engine';
 import type { SnapshotData, SnapshotFighter } from '@net/codec';
 import { RemoteInterpolator } from '@net/sync';
+import { AUTO_CANCEL_LANDING_LAG, SDI_NUDGE_DISTANCE } from '@sim/combat-kinematics';
 import { getFighterSpec } from '@sim/data';
 import {
   ALL_FIGHTER_IDS,
@@ -419,4 +420,288 @@ describe('Smash Game Feel — Expressive Model Poses, Limb Pop, Hitlag Rattle & 
       }
     }
   });
+});
+
+describe('Platform-Fighter Fundamentals — Attack Kinematics, Combos, Movement & Recovery (Gates F8–F10)', () => {
+  beforeAll(async () => {
+    await ensurePhysics();
+  });
+
+  afterEach(() => {
+    disposeAllWorlds();
+  });
+
+  it('Gate F8: Grounded/aerial attack kinematics apply subtle windup coil -> forward step-in, Bair recoil, Dair stall->stomp, and ledge edge-stop', () => {
+    // 1) Fheavy: windup pulls back slightly, active surges forward for clear ground travel
+    const wHeavy = createMatch();
+    positionPair(wHeavy, 0, 8.0);
+    const fH = wHeavy.fighters[0]!;
+    const fheavySpec = getFighterSpec(FighterId.Earl).moves.get(MoveId.Fheavy)!;
+    let sawWindupPullback = false;
+    let sawActiveSurge = false;
+    const hTape = tape().tap(InputDir.Right, InputBit.Heavy).build();
+    for (let t = 0; t < fheavySpec.total + 2; t++) {
+      wHeavy.step([hTape[t] ?? 0, 0]);
+      if (fH.state === FighterState.Attack && fH.moveFrame === 1 && fH.vx < -0.5) sawWindupPullback = true;
+      if (fH.state === FighterState.Attack && fH.moveFrame === fheavySpec.startup && fH.vx > 5.0) sawActiveSurge = true;
+    }
+    expect(sawWindupPullback).toBe(true);
+    expect(sawActiveSurge).toBe(true);
+    expect(fH.x).toBeGreaterThan(0.35);
+
+    // 2) Ftilt steps physically forward from idle
+    const wTilt = createMatch();
+    positionPair(wTilt, 0, 8.0);
+    const fT = wTilt.fighters[0]!;
+    runTape(wTilt, [tape().tap(InputDir.Right, InputBit.Attack).build(), []], 20);
+    expect(fT.x).toBeGreaterThan(0.18);
+
+    // 3) Bair recoils opposite strike direction (+X when facing right & kicking left); Dair stalls then stomps down
+    const wAir = createMatch();
+    const fA = wAir.fighters[0]!;
+    fA.x = 0; fA.y = 4.0; fA.vx = 0; fA.vy = 0;
+    fA.flags = FighterFlag.FacingRight;
+    fA.state = FighterState.Airborne;
+    const bairSpec = getFighterSpec(FighterId.Earl).moves.get(MoveId.Bair)!;
+    runTape(wAir, [tape().tap(InputDir.Left, InputBit.Attack).build(), []], bairSpec.startup + 1);
+    expect(fA.activeMove).toBe(MoveId.Bair);
+    expect(fA.vx).toBeGreaterThan(0.8);
+
+    const wDair = createMatch();
+    const fD = wDair.fighters[0]!;
+    fD.x = 0; fD.y = 5.0; fD.vx = 0; fD.vy = -1.5;
+    fD.flags = FighterFlag.FacingRight;
+    fD.state = FighterState.Airborne;
+    const dairSpec = getFighterSpec(FighterId.Earl).moves.get(MoveId.Dair)!;
+    let maxStartupVy = -99;
+    let minActiveVy = 99;
+    const dTape = tape().tap(InputDir.Down, InputBit.Attack).build();
+    for (let t = 0; t < dairSpec.startup + 2; t++) {
+      wDair.step([dTape[t] ?? 0, 0]);
+      if (fD.moveFrame === 1) maxStartupVy = Math.max(maxStartupVy, fD.vy);
+      if (fD.moveFrame >= dairSpec.startup) minActiveVy = Math.min(minActiveVy, fD.vy);
+    }
+    expect(maxStartupVy).toBeGreaterThan(-0.5);
+    expect(minActiveVy).toBeLessThanOrEqual(-5.0);
+
+    // 4) Grounded ledge Edge-Stop: Fheavy right at Willow's right rim stops cleanly instead of lunging offstage!
+    const wEdge = createMatch({
+      fighters: [
+        { slot: 0, id: FighterId.Earl, team: TeamId.None },
+        { slot: 1, id: FighterId.Earl, team: TeamId.None },
+        { slot: 2, id: FighterId.Earl, team: TeamId.None },
+        { slot: 3, id: FighterId.Earl, team: TeamId.None },
+        { slot: 4, id: FighterId.Earl, team: TeamId.None },
+      ],
+    });
+    positionPair(wEdge, 12.6, -4.0);
+    wEdge.fighters[2]!.x = -8; wEdge.fighters[3]!.x = -9; wEdge.fighters[4]!.x = -10;
+    const fEdge = wEdge.fighters[0]!;
+    runTape(wEdge, [tape().tap(InputDir.Right, InputBit.Heavy).build(), [], [], [], []], fheavySpec.total + 4);
+    expect((fEdge.flags & FighterFlag.Grounded) !== 0).toBe(true);
+    expect(fEdge.x).toBeLessThanOrEqual(13.05);
+  });
+
+  it('Gate F9 (Movement): True Dash-Dancing, RAR (Reverse Aerial Rush), mid-aerial SHFF Fast-Fall, and 3f Auto-Cancel', () => {
+    // 1) Dash-Dancing: flip direction during initial dash reverses facing & stays in Dash with full opposite speed
+    const wDD = createMatch();
+    positionPair(wDD, 0, 8.0);
+    const fDD = wDD.fighters[0]!;
+    const ddTape = tape().hold(4, InputDir.Right).hold(3, InputDir.Left).build();
+    runTape(wDD, [ddTape, []], 7);
+    expect(fDD.state).toBe(FighterState.Dash);
+    expect((fDD.flags & FighterFlag.FacingRight) === 0).toBe(true);
+    expect(fDD.vx).toBeLessThan(-7.0);
+
+    // 2) RAR (Reverse Aerial Rush): run right -> tap left (Skid) -> jump + attack -> flies right while facing left!
+    const wRar = createMatch();
+    positionPair(wRar, -3.0, 8.0);
+    const fRar = wRar.fighters[0]!;
+    const rarTape = tape()
+      .hold(14, InputDir.Right) // Dash -> Run
+      .tap(InputDir.Left) // Skid
+      .tap(InputDir.Left, InputBit.Jump) // RAR jump flip
+      .tap(InputDir.Right, InputBit.Attack) // buffered Bair moving forward!
+      .build();
+    runTape(wRar, [rarTape, []], 20);
+    expect((fRar.flags & FighterFlag.Grounded) === 0).toBe(true);
+    expect((fRar.flags & FighterFlag.FacingRight) === 0).toBe(true);
+    expect(fRar.vx).toBeGreaterThan(2.5);
+    expect(fRar.activeMove).toBe(MoveId.Bair);
+
+    // 3) Mid-aerial SHFF Fast-Fall + Auto-Cancel landing lag (3f instead of full landingLag)
+    const wShff = createMatch();
+    const fS = wShff.fighters[0]!;
+    fS.x = 0; fS.y = 4.2; fS.vx = 0; fS.vy = -1.0;
+    fS.flags = FighterFlag.FacingRight;
+    fS.state = FighterState.Airborne;
+    const fairSpec = getFighterSpec(FighterId.Earl).moves.get(MoveId.Fair)!;
+    // Start Fair, tap Down mid-aerial while falling -> FastFall engages during Attack!
+    const ffTape = tape().tap(InputDir.Right, InputBit.Attack).wait(2).tap(InputDir.Down).build();
+    runTape(wShff, [ffTape, []], 5);
+    expect(fS.state).toBe(FighterState.Attack);
+    expect((fS.flags & FighterFlag.FastFall) !== 0).toBe(true);
+
+    // Auto-Cancel: place fighter right above ground during late recovery frame of Fair -> lands with 3f lag!
+    fS.flags &= ~FighterFlag.FastFall;
+    fS.moveFrame = fairSpec.total - 3;
+    fS.y = 0.08;
+    fS.vy = -4.0;
+    wShff.step([0, 0]);
+    expect(fS.state).toBe(FighterState.LandingLag);
+    expect(fS.hitstunFrames).toBe(AUTO_CANCEL_LANDING_LAG);
+    expect(fairSpec.landingLag).toBeGreaterThan(AUTO_CANCEL_LANDING_LAG);
+  });
+
+  it('Gate F9 (Combos & Counterplay): On-Hit IASA combo cancels, Brawlhalla Chase-Dodge attack cancel, and Hitstop SDI', () => {
+    // 1) On-Hit IASA combo: Earl Utilt -> early Jump cancel (10f before total!) -> Uair true 2-hit combo
+    const wCombo = createMatch();
+    positionPair(wCombo, 0, 1.15);
+    const atk = wCombo.fighters[0]!;
+    const def = wCombo.fighters[1]!;
+    def.damage = 25;
+    const utiltSpec = getFighterSpec(FighterId.Earl).moves.get(MoveId.Utilt)!;
+    let jumpedEarlyAtFrame = -1;
+    let maxCombo = 0;
+    let hit1 = false;
+    let jumpQueued = false;
+    let airQueued = false;
+    for (let t = 0; t < 44; t++) {
+      let aM = 0;
+      const prevFrame = atk.moveFrame;
+      if (t === 0) {
+        aM = encodeInputMask(InputDir.Up, InputBit.Attack);
+      } else if (hit1 && !jumpQueued && atk.state === FighterState.Attack && atk.moveFrame >= 15) {
+        aM = encodeInputMask(InputDir.Right, InputBit.Jump);
+        jumpQueued = true;
+      } else if (jumpQueued && !airQueued && atk.state === FighterState.JumpSquat) {
+        aM = encodeInputMask(InputDir.Up, InputBit.Attack);
+        airQueued = true;
+      } else if (airQueued) {
+        aM = encodeInputMask(InputDir.Right, 0);
+      }
+      const evs = wCombo.step([aM, 0]);
+      if (!hit1 && evs.some((e) => e.kind === SimEventKind.Hit && e.a === 0 && e.b === 1)) {
+        hit1 = true;
+      }
+      if (hit1 && jumpedEarlyAtFrame < 0 && atk.state === FighterState.JumpSquat) {
+        jumpedEarlyAtFrame = prevFrame;
+      }
+      maxCombo = Math.max(maxCombo, def.comboCount);
+    }
+    expect(jumpedEarlyAtFrame).toBeGreaterThan(0);
+    expect(jumpedEarlyAtFrame).toBeLessThan(utiltSpec.total);
+    expect(maxCombo).toBeGreaterThanOrEqual(2);
+
+    // 2) Brawlhalla Chase-Dodge + Chase-Dodge Attack Cancel after landing a hit
+    const wChase = createMatch();
+    const fC = wChase.fighters[0]!;
+    fC.x = 0; fC.y = 3.2; fC.vx = 0; fC.vy = 0;
+    fC.flags = FighterFlag.FacingRight;
+    fC.state = FighterState.Airborne;
+    fC.chaseDodgeWindow = 10;
+    const chaseTape = tape()
+      .tap(InputDir.Right, InputBit.Guard) // triggers Chase-Dodge!
+      .wait(7)
+      .tap(InputDir.Right, InputBit.Attack) // cancels Chase-Dodge into Fair!
+      .build();
+    wChase.step([chaseTape[0] ?? 0, 0]);
+    expect(fC.state).toBe(FighterState.AirDodge);
+    expect(fC.chaseDodgeActive).toBe(true);
+    for (let t = 1; t < chaseTape.length + 2; t++) {
+      wChase.step([chaseTape[t] ?? 0, 0]);
+    }
+    expect(fC.state).toBe(FighterState.Attack);
+    expect(fC.activeMove).toBe(MoveId.Fair);
+
+    // 3) Smash Hitstop SDI: tapping directional input during hitstop nudges victim cleanly
+    const wSdi = createMatch();
+    positionPair(wSdi, 0, 1.2);
+    const defS = wSdi.fighters[1]!;
+    defS.state = FighterState.Hitstun;
+    defS.hitstopFrames = 6;
+    defS.hitstunFrames = 14;
+    defS.sdiNudgesLeft = 2;
+    const xBefore = defS.x;
+    wSdi.step([0, encodeInputMask(InputDir.Right, 0)]);
+    expect(defS.sdiNudgesLeft).toBe(1);
+    expect(defS.x - xBefore).toBeCloseTo(SDI_NUDGE_DISTANCE, 3);
+  });
+
+  it.each(ALL_FIGHTER_IDS)(
+    'Gate F10: Fighter %i recovers reliably from deep offstage via directional Uspec ledge-snap and AirDodge ledge-snap',
+    (fid) => {
+      // 1) Deep offstage right of Willow's ledge (x=13.0, y=0.0): doubleJump inward + UpLeft Uspec -> recovers to ledge/stage!
+      const world = createMatch({
+        stocksOverride: 1,
+        fighters: [
+          { slot: 0, id: fid, team: TeamId.None },
+          { slot: 1, id: FighterId.Earl, team: TeamId.None },
+          { slot: 2, id: FighterId.Earl, team: TeamId.None },
+          { slot: 3, id: FighterId.Earl, team: TeamId.None },
+          { slot: 4, id: FighterId.Earl, team: TeamId.None },
+        ],
+      });
+      positionPair(world, 0, -4.0);
+      world.fighters[2]!.x = -7; world.fighters[3]!.x = -9; world.fighters[4]!.x = -11;
+      const f = world.fighters[0]!;
+      f.x = 16.0;
+      f.y = -2.0;
+      f.vx = 0;
+      f.vy = -2.0;
+      f.flags = FighterFlag.FacingRight; // facing away from stage initially!
+      f.state = FighterState.Airborne;
+      f.doubleJumpsLeft = 1;
+      f.airDodgesLeft = 1;
+
+      let recovered = false;
+      for (let t = 0; t < 150; t++) {
+        let m = encodeInputMask(InputDir.Left, 0);
+        if (t === 0) m = encodeInputMask(InputDir.Left, InputBit.Jump);
+        else if (t === 22) m = encodeInputMask(InputDir.UpLeft, InputBit.Special);
+        world.step([m, 0, 0, 0, 0]);
+        const cur = world.fighters[0]!;
+        if (cur.state === FighterState.LedgeHang || (cur.flags & FighterFlag.Grounded) !== 0) {
+          recovered = true;
+          break;
+        }
+      }
+      expect(recovered, `Fighter ${fid} failed deep offstage Uspec recovery`).toBe(true);
+      expect(f.stocks).toBe(1);
+
+      // 2) Air-Dodge ledge magnetism: airborne just outside ledge dodging inward grabs ledge cleanly
+      const wAd = createMatch({
+        stocksOverride: 1,
+        fighters: [
+          { slot: 0, id: fid, team: TeamId.None },
+          { slot: 1, id: FighterId.Earl, team: TeamId.None },
+          { slot: 2, id: FighterId.Earl, team: TeamId.None },
+          { slot: 3, id: FighterId.Earl, team: TeamId.None },
+          { slot: 4, id: FighterId.Earl, team: TeamId.None },
+        ],
+      });
+      positionPair(wAd, 0, -4.0);
+      wAd.fighters[2]!.x = -7; wAd.fighters[3]!.x = -9; wAd.fighters[4]!.x = -11;
+      const fAd = wAd.fighters[0]!;
+      fAd.x = 14.3;
+      fAd.y = -0.6;
+      fAd.vx = 0;
+      fAd.vy = -1.0;
+      fAd.flags = FighterFlag.FacingRight;
+      fAd.state = FighterState.Airborne;
+      fAd.airDodgesLeft = 1;
+
+      let grabbed = false;
+      for (let t = 0; t < 30; t++) {
+        const m = t === 0 ? encodeInputMask(InputDir.Left, InputBit.Guard) : encodeInputMask(InputDir.Left, 0);
+        wAd.step([m, 0, 0, 0, 0]);
+        const cur = wAd.fighters[0]!;
+        if (cur.state === FighterState.LedgeHang || (cur.flags & FighterFlag.Grounded) !== 0) {
+          grabbed = true;
+          break;
+        }
+      }
+      expect(grabbed, `Fighter ${fid} failed AirDodge ledge-snap recovery`).toBe(true);
+    },
+  );
 });

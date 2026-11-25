@@ -779,8 +779,16 @@ function sampleStatePose(f: SnapshotFighter & { id?: FighterId }, simTimeSec: nu
     case FighterState.SpotDodge:
     case FighterState.AirDodge:
       p.pivotAroundCom = s === FighterState.Roll;
-      p.bodyPitchZ = s === FighterState.Roll ? -(f.stateFrame * 0.44) : 0.24;
-      p.squashBias = -0.18;
+      if (s === FighterState.AirDodge && Math.hypot(f.vx, f.vy) > 13.8) {
+        p.bodyX = 0.24;
+        p.bodyPitchZ = -0.46;
+        p.handFX = 0.48;
+        p.handBX = -0.52;
+        p.squashBias = 0.16;
+      } else {
+        p.bodyPitchZ = s === FighterState.Roll ? -(f.stateFrame * 0.44) : 0.24;
+        p.squashBias = -0.18;
+      }
       break;
     case FighterState.Grabbing:
       p.bodyX = 0.22;

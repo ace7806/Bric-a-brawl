@@ -22,10 +22,10 @@ A repeatable engineering + visual evaluation process to verify and tune Super Sm
    - **Launch Spectacle**: Does the launched fighter tumble around their center-of-mass trailing smoke puffs and livery ribbon?
    - **Audio Punch**: Do every melee swing whoosh and every hit tier (`HitLight` / `HitMid` / `HitHeavy`) feel distinct and grounded?
 4. **Tune in One Single Source of Truth**
-   - **Input & combat responsiveness**: [`src/sim/fighter.ts`](../src/sim/fighter.ts), [`src/sim/combat.ts`](../src/sim/combat.ts), [`src/client/input.ts`](../src/client/input.ts), [`src/host/engine.ts`](../src/host/engine.ts)
+   - **Input, movement, combos & recovery**: [`src/sim/fighter.ts`](../src/sim/fighter.ts), [`src/sim/combat-kinematics.ts`](../src/sim/combat-kinematics.ts), [`src/sim/fighter-kits.ts`](../src/sim/fighter-kits.ts), [`src/sim/combat.ts`](../src/sim/combat.ts), [`src/client/input.ts`](../src/client/input.ts), [`src/host/engine.ts`](../src/host/engine.ts)
    - **Bone parenting & model rigs**: [`src/client/models.ts`](../src/client/models.ts)
    - **3-phase attack choreography & hitlag rattle**: [`src/client/poses.ts`](../src/client/poses.ts)
-   - **Slash arcs, directional sparks, kill-sparks, tumble smoke**: [`src/client/vfx.ts`](../src/client/vfx.ts), [`src/client/combat-feel.ts`](../src/client/combat-feel.ts)
+   - **Slash arcs, directional sparks, kill-sparks, Fast-Fall twinkle, Chase-Dodge glint**: [`src/client/vfx.ts`](../src/client/vfx.ts), [`src/client/combat-feel.ts`](../src/client/combat-feel.ts)
    - **Directional camera punch & zoom kick**: [`src/client/camera.ts`](../src/client/camera.ts)
    - **Swing whooshes & sub-bass hit punch**: [`assets-src/audio/recipes.json`](../assets-src/audio/recipes.json), [`src/client/audio-dsp.ts`](../src/client/audio-dsp.ts)
 5. **Re-Verify All Budgets & Zero Regressions**
@@ -33,7 +33,7 @@ A repeatable engineering + visual evaluation process to verify and tune Super Sm
 
 ---
 
-## Automated Quality Gates (F1–F7)
+## Automated Quality Gates (F1–F10)
 
 | Gate | What It Verifies | Where It Runs |
 |---|---|---|
@@ -44,3 +44,6 @@ A repeatable engineering + visual evaluation process to verify and tune Super Sm
 | **F5 — Smash Combat Mechanics** | Mashing `Jab1 -> Jab2 -> Jab3` lands all 3 hits; airborne `Heavy` -> directional aerials; buffered short-hop aerials; diagonal turnaround; sliding grounded attacks; close-range `Utilt` | `combat-feel.test.ts` |
 | **F6 — Contact Accuracy & VFX/SFX** | Hit sparks/chips spawn on defender; all melee moves emit hitbox-aligned 3D slash arcs + swing whooshes; heavy launches trigger Kill-Spark | `combat-feel.test.ts` & `combat-feel.spec.ts` |
 | **F7 — Audio & Render Budgets** | All 51 SFX + 13 auctioneer + 3 stems pass LUFS/peak/centroid; High draw calls `<= 90`, tris `<= 110k`, 0 console/page errors | `audio:build`, `m4-m5.spec.ts`, `combat-feel.spec.ts` |
+| **F8 — Attack Kinematics & Edge-Stop** | Per-move windup coil -> forward step-in/lunge (`Fheavy`, `Ftilt`, `Jab`), `Bair` opposite recoil, `Dair` hover -> meteor stomp, and grounded ledge-stop protection against accidental SDs | `combat-feel.test.ts` |
+| **F9 — Movement, Combos & Counterplay** | True Dash-Dancing, RAR (Reverse Aerial Rush), mid-aerial SHFF Fast-Fall & `3f` Auto-Cancel, On-Hit IASA combo cancels (`Dtilt -> Jump -> Fair`), Brawlhalla Chase-Dodge + attack cancel, and Hitstop SDI | `combat-feel.test.ts` |
+| **F10 — Offstage Recovery Reliability** | All 4 fighters (`Earl`, `Grog`, `Nesta`, `Moss`) reliably recover from deep offstage via directional `Uspec` ledge-snap and `AirDodge` ledge magnetism | `combat-feel.test.ts` |

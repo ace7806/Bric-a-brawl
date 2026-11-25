@@ -743,6 +743,7 @@ export class BricABrawlApp {
             if (!this.prevLastCall && !this.prevSuddenDeath) this.audio.setMusicPhase(MusicPhase.RoundAB);
           }
           const launchSpeed = launchSpeedByPair.get(ev.a * 16 + ev.b) ?? 0;
+          const comboCount = fb ? fb.comboCount : 0;
           triggerHitFeedback(
             {
               attacker: f,
@@ -753,11 +754,20 @@ export class BricABrawlApp {
               defenderColorHex: defCol,
               allowLoudFx: !isTitleScreen,
               nowMs,
+              comboCount,
             },
             this.renderer.vfx,
             this.camera,
             this.audio,
           );
+          if (isRoundScreen && comboCount >= 3) {
+            const prefix = `Lot ${ev.a + 1} · `;
+            const line = `${prefix}${comboCount}-HIT COMBO`;
+            const rest = this.feedLines[0]?.startsWith(prefix) && this.feedLines[0].endsWith('COMBO')
+              ? this.feedLines.slice(1)
+              : this.feedLines;
+            this.feedLines = [line, ...rest].slice(0, 4);
+          }
           break;
         }
         case SimEventKind.Block: {

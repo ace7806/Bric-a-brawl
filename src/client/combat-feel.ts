@@ -32,6 +32,8 @@ export interface SwingSoundCue {
 interface FighterMotionTrack {
   state: FighterState;
   grounded: boolean;
+  fastFall: boolean;
+  facingRight: boolean;
   vy: number;
   move: MoveId;
   slashFiredForMove: boolean;
@@ -285,6 +287,7 @@ export interface HitFeedbackInput {
   readonly defenderColorHex: string;
   readonly allowLoudFx: boolean;
   readonly nowMs: number;
+  readonly comboCount?: number;
 }
 
 /** Fires coordinated Smash hit VFX + SFX + directional camera kick at the exact defender contact point. */
@@ -298,11 +301,14 @@ export function triggerHitFeedback(
   const contact = computeHitContactPoint(input.attacker, input.defender, input.moveId);
   const tier = classifyHitImpact(input.damage, input.attacker?.id ?? null, input.moveId, input.launchSpeed);
   const pan = Math.max(-0.6, Math.min(0.6, contact.x / 12));
-  const pitchScale = input.defender
+  const basePitch = input.defender
     ? fighterPitchScale(input.defender.id, input.defender.nestaSize)
     : input.attacker
       ? fighterPitchScale(input.attacker.id, input.attacker.nestaSize)
       : 1.0;
+  // Rising musical pitch on consecutive combo hits makes multi-hit strings audibly exhilarating!
+  const comboSteps = Math.max(0, (input.comboCount ?? 1) - 1);
+  const pitchScale = basePitch * (1 + Math.min(0.24, comboSteps * 0.05));
 
   if (input.allowLoudFx) {
     const soundId =
@@ -371,6 +377,8 @@ export class CombatFeedbackTracker {
   ): void {
     const pal = getGameData().palette;
     const grounded = (f.flags & FighterFlag.Grounded) !== 0;
+    const fastFall = (f.flags & FighterFlag.FastFall) !== 0;
+    const facingRight = (f.flags & FighterFlag.FacingRight) !== 0;
     const prev = this.tracks.get(f.slot);
     const pan = Math.max(-0.6, Math.min(0.6, f.x / 12));
     const pitchScale = fighterPitchScale(f.id, f.nestaSize);
@@ -392,9 +400,35 @@ export class CombatFeedbackTracker {
       } else if (!prev.grounded && grounded && prev.vy < -3.5) {
         if (allowAudio) audio.play(SoundId.Land, { pan, pitchScale, gainScale: Math.min(1, Math.abs(prev.vy) / 14) });
         vfx.spawnDust(f.x, f.y, 4);
+      } else if (grounded && f.state === FighterState.Dash && (prev.state !== FighterState.Dash || prev.facingRight !== facingRight)) {
+        // Tactile Smash dash-burst & Dash-Dance turnaround dust kick
+        vfx.spawnDust(f.x, f.y, 3);
+        if (allowAudio) audio.play(f.id === FighterId.Grog ? SoundId.StepStone : SoundId.StepChina, { pan, pitchScale: pitchScale * 1.12, gainScale: 0.34 });
+        stepCd = 12;
       } else if (grounded && (f.state === FighterState.Run || f.state === FighterState.Dash) && stepCd === 0) {
         if (allowAudio) audio.play(f.id === FighterId.Grog ? SoundId.StepStone : SoundId.StepChina, { pan, pitchScale, gainScale: 0.26 });
         stepCd = 15;
+      }
+
+      // Classic Smash Fast-Fall twinkle spark on rising edge
+      if (!grounded && fastFall && !prev.fastFall) {
+        vfx.spawnFastFallSpark(f.x, f.y + 0.86);
+      }
+
+      // Air-Dodge & Brawlhalla Chase-Dodge directional streak glint
+      if (f.state === FighterState.AirDodge && prev.state !== FighterState.AirDodge) {
+        const isChase = f.chaseDodgeActive || Math.hypot(f.vx, f.vy) > 13.8;
+        const glintCol = isChase
+          ? (pal.accents['gilt_hi'] ?? pal.accents['gilt']!)
+          : pal.neutrals['bone']!;
+        vfx.spawnChaseGlint(f.x, f.y + 0.72, f.vx, f.vy, glintCol, isChase);
+        if (allowAudio) {
+          audio.play(SoundId.SwingLight, {
+            pan,
+            pitchScale: pitchScale * (isChase ? 1.38 : 1.15),
+            gainScale: isChase ? 0.62 : 0.44,
+          });
+        }
       }
 
       // Smash heavy charge feedback: rising gilt sparks & subtle pulse cue
@@ -439,6 +473,8 @@ export class CombatFeedbackTracker {
     this.tracks.set(f.slot, {
       state: f.state,
       grounded,
+      fastFall,
+      facingRight,
       vy: f.vy,
       move: f.activeMove,
       slashFiredForMove,

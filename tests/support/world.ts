@@ -79,9 +79,13 @@ export function resetFighterForTest(world: SimWorld, f: FighterRuntime, x: numbe
   f.activeMove = MoveId.None;
   f.moveFrame = 0;
   f.moveHitConnected = false;
+  f.moveHitLanded = false;
   f.moveHitIds.length = 0;
   f.moveIsClean = false;
   f.heavyChargeFrames = 0;
+  f.chaseDodgeWindow = 0;
+  f.chaseDodgeActive = false;
+  f.sdiNudgesLeft = 0;
   f.hitstopFrames = 0;
   f.hitstunFrames = 0;
   f.blockstunFrames = 0;

@@ -431,6 +431,62 @@ export class VfxSystem {
     });
   }
 
+  /** Classic Smash 4-point bone-and-gilt twinkle confirming Fast-Fall engagement mid-air. */
+  public spawnFastFallSpark(x: number, y: number): void {
+    const pal = getGameData().palette;
+    const boneCol = new THREE.Color(pal.neutrals['bone']!);
+    const giltCol = new THREE.Color(pal.accents['gilt_hi'] ?? pal.accents['gilt']!);
+    for (let i = 0; i < 4; i++) {
+      if (this.sparks.length >= MAX_SPARKS) this.sparks.shift();
+      const angle = (i * Math.PI) / 2;
+      this.sparks.push({
+        x,
+        y,
+        z: 0.52,
+        vx: Math.cos(angle) * 2.2,
+        vy: Math.sin(angle) * 2.2 - 1.2,
+        angle,
+        length: i % 2 === 0 ? 0.82 : 0.64,
+        width: 0.52,
+        age: 0,
+        maxAge: 8,
+        drag: 0.84,
+        color: i % 2 === 0 ? boneCol : giltCol,
+      });
+    }
+  }
+
+  /** Crisp directional afterimage streak burst for Air-Dodge and Brawlhalla-style Chase-Dodge bursts. */
+  public spawnChaseGlint(x: number, y: number, dirX: number, dirY: number, colorHex: string, strong = false): void {
+    const col = new THREE.Color(colorHex);
+    const len = Math.hypot(dirX, dirY);
+    const nx = len > 1e-3 ? dirX / len : 1;
+    const ny = len > 1e-3 ? dirY / len : 0;
+    const baseAngle = Math.atan2(ny, nx);
+    const count = strong ? 6 : 4;
+    for (let i = 0; i < count; i++) {
+      if (this.sparks.length >= MAX_SPARKS) this.sparks.shift();
+      const spread = (i - (count - 1) / 2) * 0.22;
+      const angle = baseAngle + spread;
+      const spd = (strong ? 13 : 9) + (i % 2) * 2.5;
+      this.sparks.push({
+        x: x - nx * 0.25,
+        y: y - ny * 0.25,
+        z: 0.44,
+        vx: -Math.cos(angle) * spd * 0.45,
+        vy: -Math.sin(angle) * spd * 0.45,
+        angle,
+        length: strong ? 1.15 : 0.78,
+        width: strong ? 0.78 : 0.55,
+        age: 0,
+        maxAge: strong ? 10 : 8,
+        drag: 0.85,
+        color: col,
+      });
+    }
+    if (strong) this.spawnRing(x, y, colorHex, 1.35, 9);
+  }
+
   /** Rate-limited Delft two-tone impact frame (<= 3 per second; border pulse when reduceFlashes is on). */
   public triggerImpactFrame(durationFrames: number, nowMs: number): boolean {
     const cutoff = nowMs - 1000;

@@ -107,7 +107,7 @@ const GOLDEN_FIXTURES = [
     name: 'Willow mixed 4-bot',
     seed: 101,
     arenaId: ArenaId.Willow,
-    expectedHash: '849c86b4',
+    expectedHash: '5fef4f40',
     bots: [
       { slot: 0, id: FighterId.Earl, kind: BotKind.Brawler },
       { slot: 1, id: FighterId.Grog, kind: BotKind.Chaser },
@@ -119,7 +119,7 @@ const GOLDEN_FIXTURES = [
     name: 'HighTea sharp/brawler',
     seed: 202,
     arenaId: ArenaId.HighTea,
-    expectedHash: '5ee5a692',
+    expectedHash: '5f79ef30',
     bots: [
       { slot: 0, id: FighterId.Grog, kind: BotKind.Sharp },
       { slot: 1, id: FighterId.Moss, kind: BotKind.Brawler },
@@ -131,7 +131,7 @@ const GOLDEN_FIXTURES = [
     name: 'MendedBowl split chaos',
     seed: 303,
     arenaId: ArenaId.MendedBowl,
-    expectedHash: '33c2b0aa',
+    expectedHash: 'b9f72acd',
     bots: [
       { slot: 0, id: FighterId.Nesta, kind: BotKind.Brawler },
       { slot: 1, id: FighterId.Earl, kind: BotKind.Sharp },
@@ -143,7 +143,7 @@ const GOLDEN_FIXTURES = [
     name: 'Willow mirror Sharp vs Brawler',
     seed: 404,
     arenaId: ArenaId.Willow,
-    expectedHash: 'cd9fb3bc',
+    expectedHash: '837031d4',
     bots: [
       { slot: 0, id: FighterId.Moss, kind: BotKind.Sharp },
       { slot: 1, id: FighterId.Earl, kind: BotKind.Brawler },
@@ -155,7 +155,7 @@ const GOLDEN_FIXTURES = [
     name: 'HighTea Masher & Chaser',
     seed: 505,
     arenaId: ArenaId.HighTea,
-    expectedHash: 'f0471982',
+    expectedHash: '3a14a8d5',
     bots: [
       { slot: 0, id: FighterId.Earl, kind: BotKind.Masher },
       { slot: 1, id: FighterId.Nesta, kind: BotKind.Chaser },

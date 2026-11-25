@@ -27,6 +27,7 @@ import {
   getEffectiveStartup,
   getEffectiveStats,
   jumpVel,
+  setFacing,
   transitionState,
   type FighterStepContext,
 } from './fighter-state';
@@ -138,6 +139,11 @@ const earlKit: FighterKit = {
         ? f.flags | FighterFlag.Invuln
         : f.invulnFrames <= 0 ? f.flags & ~FighterFlag.Invuln : f.flags;
       if (f.moveFrame === st) {
+        const hx = dirHx(decodeInputDir(mask));
+        if (hx !== 0) {
+          setFacing(f, hx > 0);
+          f.vx = hx * stats.airSpeed * 0.92;
+        }
         f.vy = jumpVel(stats.gravityScale, f.pipingCharged ? 6.2 : 4.6);
         f.flags &= ~FighterFlag.Grounded;
       }
@@ -179,7 +185,7 @@ const grogKit: FighterKit = {
       f.stampedeCarryFrames = 0;
     }
   },
-  onSpecialFrame(f, move, _mask, ctx) {
+  onSpecialFrame(f, move, mask, ctx) {
     const stats = getEffectiveStats(f);
     const facing = (f.flags & FighterFlag.FacingRight) !== 0 ? 1 : -1;
     const st = getEffectiveStartup(f, move, f.moveIsClean);
@@ -226,8 +232,11 @@ const grogKit: FighterKit = {
         ? f.flags | FighterFlag.Invuln
         : f.invulnFrames <= 0 ? f.flags & ~FighterFlag.Invuln : f.flags;
       if (f.moveFrame === st) {
+        const hx = dirHx(decodeInputDir(mask));
+        if (hx !== 0) setFacing(f, hx > 0);
+        const dirX = hx !== 0 ? hx : facing;
         f.vy = jumpVel(stats.gravityScale, f.moveIsClean ? 4.0 : 3.6);
-        f.vx = facing * 7.5;
+        f.vx = dirX * 7.5;
         f.flags &= ~FighterFlag.Grounded;
       }
       if (f.moveFrame >= st + move.active) {
@@ -291,6 +300,11 @@ const nestaKit: FighterKit = {
         ? f.flags | FighterFlag.Invuln
         : f.invulnFrames <= 0 ? f.flags & ~FighterFlag.Invuln : f.flags;
       if (f.moveFrame === st) {
+        const hx = dirHx(decodeInputDir(mask));
+        if (hx !== 0) {
+          setFacing(f, hx > 0);
+          f.vx = hx * stats.airSpeed * 0.92;
+        }
         const ns = requireKey(requireDefined(getFighterSpec(FighterId.Nesta).nestaSizes, 'nestaSizes'), f.nestaSize, 'nestaSizes');
         f.vy = jumpVel(stats.gravityScale, ns.popsHeight);
         f.flags &= ~FighterFlag.Grounded;
@@ -337,21 +351,29 @@ const mossKit: FighterKit = {
     } else if (move.id === MoveId.Uspec && f.moveFrame === st) {
       const reach = f.moveIsClean ? 11.0 : 9.0;
       const hx = dirHx(decodeInputDir(mask));
+      if (hx !== 0) setFacing(f, hx > 0);
       const dx0 = hx !== 0 ? hx * 0.55 : facing * 0.45;
       const len = Math.hypot(dx0, 0.85);
-      const ux = dx0 / len;
-      const uy = 0.85 / len;
+      let ux = dx0 / len;
+      let uy = 0.85 / len;
       let bestT = Infinity;
       let latch: FighterRuntime | null = null;
+      let targetLedge: { x: number; y: number } | null = null;
       for (const lp of ctx.island.ledges) {
-        const d = Math.hypot(lp.x - f.x, lp.y - (f.y + 0.5));
-        if (d <= reach && ((lp.x - f.x) * ux + (lp.y - f.y - 0.5) * uy) / Math.max(1e-4, d) > 0.35 && d < bestT) bestT = d;
+        const lx = lp.x - f.x;
+        const ly = lp.y - (f.y + 0.5);
+        const d = Math.hypot(lx, ly);
+        if (d <= reach && (lx * ux + ly * uy) / Math.max(1e-4, d) > 0.2 && d < bestT) {
+          bestT = d;
+          targetLedge = lp;
+        }
       }
       for (const o of ctx.fighters) {
         const d = Math.hypot(o.x - f.x, o.y - f.y);
         if (o.slot !== f.slot && o.stocks > 0 && o.state < FighterState.Respawn && d <= reach && ((o.x - f.x) * ux + (o.y - f.y) * uy) / Math.max(1e-4, d) > 0.45 && d < bestT) {
           bestT = d;
           latch = o;
+          targetLedge = null;
         }
       }
       if (bestT === Infinity) {
@@ -360,8 +382,16 @@ const mossKit: FighterKit = {
         }
       }
       if (bestT < Infinity) {
+        if (targetLedge !== null) {
+          // Aim tether pull directly toward the grabbed ledge rim for reliable Smash tether recovery
+          const tx = targetLedge.x - f.x;
+          const ty = targetLedge.y + 0.45 - f.y;
+          const td = Math.max(1e-4, Math.hypot(tx, ty));
+          ux = tx / td;
+          uy = ty / td;
+        }
         f.vx = ux * 20.0;
-        f.vy = uy * 20.0;
+        f.vy = Math.max(12.0, uy * 21.0);
         f.flags &= ~FighterFlag.Grounded;
         if (latch) {
           latch.damage += move.damage;

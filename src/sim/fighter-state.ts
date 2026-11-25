@@ -80,9 +80,13 @@ export function transitionState(f: FighterRuntime, next: FighterState): void {
     f.activeMove = MoveId.None;
     f.moveFrame = 0;
     f.moveHitConnected = false;
+    f.moveHitLanded = false;
     f.moveHitIds.length = 0;
     f.moveIsClean = false;
     f.heavyChargeFrames = 0;
+  }
+  if (prev === FighterState.AirDodge && next !== FighterState.AirDodge) {
+    f.chaseDodgeActive = false;
   }
   if (prev !== next) {
     f.state = next;
@@ -123,9 +127,13 @@ export function resetFighterLife(f: FighterRuntime, x: number, y: number, stocks
   f.activeMove = MoveId.None;
   f.moveFrame = 0;
   f.moveHitConnected = false;
+  f.moveHitLanded = false;
   f.moveHitIds.length = 0;
   f.moveIsClean = false;
   f.heavyChargeFrames = 0;
+  f.chaseDodgeWindow = 0;
+  f.chaseDodgeActive = false;
+  f.sdiNudgesLeft = 0;
   f.hitstopFrames = 0;
   f.hitstunFrames = 0;
   f.blockstunFrames = 0;
@@ -178,8 +186,9 @@ export function createFighter(
     state: FighterState.Idle, stateFrame: 0, flags: FighterFlag.None,
     damage: initialDamage, guardHp, guardRegenDelay: 0, parryCooldown: 0, gilt: 0, stocks,
     heldGadget: GadgetId.None, heldGadgetAmmo: 0, gadgetCooldown: 0, corkChargeFrames: 0,
-    activeMove: MoveId.None, moveFrame: 0, moveHitConnected: false, moveHitIds: [], moveIsClean: false,
-    heavyChargeFrames: 0, hitstopFrames: 0, hitstunFrames: 0, blockstunFrames: 0, invulnFrames: 0,
+    activeMove: MoveId.None, moveFrame: 0, moveHitConnected: false, moveHitLanded: false, moveHitIds: [], moveIsClean: false,
+    heavyChargeFrames: 0, chaseDodgeWindow: 0, chaseDodgeActive: false, sdiNudgesLeft: 0,
+    hitstopFrames: 0, hitstunFrames: 0, blockstunFrames: 0, invulnFrames: 0,
     regrabImmunity: 0, grabbedBySlot: -1, grabbingSlot: -1, grabHoldFrames: 0,
     doubleJumpsLeft: 1, airDodgesLeft: 1, wallJumpsLeft: 1, ledgeGrabCount: 0, ledgeChunkIndex: -1, ledgeSide: 0,
     comboCount: 0, comboHitsByMove: new Map(), lastHitBySlot: -1, lastHitByGadget: GadgetId.None, lastHitByMove: MoveId.None, lastHitTick: -1,

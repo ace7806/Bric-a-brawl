@@ -192,15 +192,21 @@ async function runLiveAttackResponsivenessCheck(browser: Browser, baseUrl: strin
       { timeout: 15_000, polling: 50 },
     );
     // Remove default practice Chaser bot so it cannot interrupt our clean input-latency measurement
+    const snapsBeforeRestart = await page.evaluate(() => window.__bbDebug?.snapshotsReceived ?? 0);
     await page.click('[data-action="remove-bot"]');
     await page.waitForFunction(
-      (idleState) =>
-        window.__bbDebug?.snapshotsReceived !== undefined &&
-        window.__bbDebug.snapshotsReceived >= 2 &&
-        window.__bbDebug.localFighterState?.state === idleState,
-      FighterState.Idle,
-      { timeout: 10_000, polling: 30 },
+      ([prevSnaps, idleState]) => {
+        const d = window.__bbDebug;
+        if (!d || d.localFighterState === null) return false;
+        // Wait until worker restart resets snapshotsReceived (< prevSnaps) and streams >= 8 steady frames
+        return (d.snapshotsReceived < prevSnaps ? d.snapshotsReceived >= 8 : d.snapshotsReceived >= prevSnaps + 15) &&
+          d.localFighterState.state === idleState;
+      },
+      [snapsBeforeRestart, FighterState.Idle] as const,
+      { timeout: 10_000, polling: 25 },
     );
+    // Give SwiftShader 2 frames to settle shader compilation after practice lobby restart
+    await page.waitForTimeout(120);
     await page.evaluate(() => {
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     });

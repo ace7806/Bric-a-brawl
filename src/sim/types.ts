@@ -107,9 +107,13 @@ export interface FighterRuntime {
   activeMove: MoveId;
   moveFrame: number;
   moveHitConnected: boolean;
+  moveHitLanded: boolean;
   moveHitIds: number[];
   moveIsClean: boolean;
   heavyChargeFrames: number;
+  chaseDodgeWindow: number;
+  chaseDodgeActive: boolean;
+  sdiNudgesLeft: number;
   hitstopFrames: number;
   hitstunFrames: number;
   blockstunFrames: number;

@@ -1,5 +1,6 @@
 import { assert } from '@sim/assert';
 import { computeHitstun } from '@sim/combat';
+import { CHASE_DODGE_WINDOW_FRAMES } from '@sim/combat-kinematics';
 import { getFighterSpec, getGameData } from '@sim/data';
 import { ChunkState, ErrorCode, FighterFlag, FighterId, FighterState, MoveId, NestaSize, SimEventKind } from '@sim/enums';
 import { recomputeLedges } from '@sim/island';
@@ -30,7 +31,11 @@ interface FighterCheckpoint {
   slipperyFrames: number;
   moveIsClean: boolean;
   moveHitConnected: boolean;
+  moveHitLanded: boolean;
   moveHitIds: number[];
+  chaseDodgeWindow: number;
+  chaseDodgeActive: boolean;
+  sdiNudgesLeft: number;
   heavyChargeFrames: number;
   comboCount: number;
   state: FighterState;
@@ -85,10 +90,16 @@ export function applySnapshotFighter(sf: SnapshotFighter, target: FighterRuntime
   } else {
     const stats = getFighterSpec(target.id).stats;
     const grounded = (sf.flags & FighterFlag.Grounded) !== 0;
+    const isSelfBurst =
+      sf.state === FighterState.AirDodge ||
+      sf.state === FighterState.Roll ||
+      sf.state === FighterState.Attack;
     const maxSelfVx =
-      sf.state === FighterState.Guard || sf.state === FighterState.Parry || sf.state === FighterState.Idle
+      sf.state === FighterState.GuardStun
         ? 0.25
-        : Math.max(stats.dash, stats.run, stats.airSpeed) + 0.5;
+        : isSelfBurst
+          ? Math.max(stats.dash, stats.run, stats.airSpeed, 18.0)
+          : Math.max(stats.dash, stats.run, stats.airSpeed) + 0.5;
     if (Math.abs(sf.vx) > maxSelfVx) {
       const clampedVx = Math.sign(sf.vx) * Math.max(0, maxSelfVx - 0.5);
       target.vx = clampedVx;
@@ -110,6 +121,7 @@ export function applySnapshotFighter(sf: SnapshotFighter, target: FighterRuntime
   target.stateFrame = sf.stateFrame;
   target.activeMove = sf.activeMove;
   target.moveFrame = sf.state === FighterState.Attack ? sf.stateFrame : 0;
+  target.chaseDodgeActive = sf.state === FighterState.AirDodge && Math.hypot(sf.vx, sf.vy) > 13.8;
   assert(
     !(target.state === FighterState.Attack && target.activeMove === MoveId.None),
     ErrorCode.InvariantViolation,
@@ -154,7 +166,11 @@ function createEmptyCheckpoint(historyCapacity: number): FighterCheckpoint {
     slipperyFrames: 0,
     moveIsClean: false,
     moveHitConnected: false,
+    moveHitLanded: false,
     moveHitIds: [],
+    chaseDodgeWindow: 0,
+    chaseDodgeActive: false,
+    sdiNudgesLeft: 0,
     heavyChargeFrames: 0,
     comboCount: 0,
     state: FighterState.Idle,
@@ -185,8 +201,12 @@ function writeCheckpoint(cp: FighterCheckpoint, tick: number, f: FighterRuntime)
   cp.slipperyFrames = f.slipperyFrames;
   cp.moveIsClean = f.moveIsClean;
   cp.moveHitConnected = f.moveHitConnected;
+  cp.moveHitLanded = f.moveHitLanded;
   cp.moveHitIds.length = 0;
   for (let i = 0; i < f.moveHitIds.length; i++) cp.moveHitIds.push(f.moveHitIds[i]!);
+  cp.chaseDodgeWindow = f.chaseDodgeWindow;
+  cp.chaseDodgeActive = f.chaseDodgeActive;
+  cp.sdiNudgesLeft = f.sdiNudgesLeft;
   cp.heavyChargeFrames = f.heavyChargeFrames;
   cp.comboCount = f.comboCount;
   cp.state = f.state;
@@ -219,8 +239,12 @@ function restoreCheckpoint(cp: FighterCheckpoint, f: FighterRuntime): void {
   f.slipperyFrames = cp.slipperyFrames;
   f.moveIsClean = cp.moveIsClean;
   f.moveHitConnected = cp.moveHitConnected;
+  f.moveHitLanded = cp.moveHitLanded;
   f.moveHitIds.length = 0;
   for (let i = 0; i < cp.moveHitIds.length; i++) f.moveHitIds.push(cp.moveHitIds[i]!);
+  f.chaseDodgeWindow = cp.chaseDodgeWindow;
+  f.chaseDodgeActive = cp.chaseDodgeActive;
+  f.sdiNudgesLeft = cp.sdiNudgesLeft;
   f.heavyChargeFrames = cp.heavyChargeFrames;
   f.comboCount = cp.comboCount;
   f.state = cp.state;
@@ -249,6 +273,7 @@ export class ClientPredictor {
   private lastAuthStocks: number;
   private lastAuthState: FighterState;
   private lastAuthDamage: number;
+  private lastAuthGilt: number;
   private lastAuthGadget: number;
   private lastAuthAmmo: number;
   private lastAuthWasCombat = false;
@@ -266,6 +291,7 @@ export class ClientPredictor {
     this.lastAuthStocks = this.fighter.stocks;
     this.lastAuthState = this.fighter.state;
     this.lastAuthDamage = this.fighter.damage;
+    this.lastAuthGilt = this.fighter.gilt;
     this.lastAuthGadget = this.fighter.heldGadget;
     this.lastAuthAmmo = this.fighter.heldGadgetAmmo;
   }
@@ -351,9 +377,11 @@ export class ClientPredictor {
     const hasResidualKb =
       Math.abs(authSelf.vx) > maxNormalVx ||
       ((authSelf.flags & FighterFlag.Grounded) !== 0 && Math.abs(authSelf.vy) > 0.5);
+    const landedHostHit = authSelf.gilt > this.lastAuthGilt;
     const isCombatState =
       authSelf.hitstopFrames > 0 ||
       hasResidualKb ||
+      landedHostHit ||
       authSelf.state === FighterState.Hitstun ||
       authSelf.state === FighterState.Tumble ||
       authSelf.state === FighterState.Held ||
@@ -373,6 +401,7 @@ export class ClientPredictor {
     this.lastAuthStocks = authSelf.stocks;
     this.lastAuthState = authSelf.state;
     this.lastAuthDamage = authSelf.damage;
+    this.lastAuthGilt = authSelf.gilt;
     this.lastAuthGadget = authSelf.heldGadget;
     this.lastAuthAmmo = authSelf.heldGadgetAmmo;
     this.lastAuthWasCombat = isCombatState;
@@ -390,6 +419,13 @@ export class ClientPredictor {
           firstStep = false;
           if (matchedBaseCp !== null && !isHostTeleport) restoreCheckpoint(matchedBaseCp, this.fighter);
           applySnapshotFighter(state, this.fighter);
+          if (landedHostHit) {
+            this.fighter.chaseDodgeWindow = CHASE_DODGE_WINDOW_FRAMES;
+            if (this.fighter.state === FighterState.Attack) {
+              this.fighter.moveHitConnected = true;
+              this.fighter.moveHitLanded = true;
+            }
+          }
         }
         this.world.stepSingleFighterForPrediction(this.localSlot, mask, tick);
         writeCheckpoint(this.checkpoints[tick & CHECKPOINT_RING_MASK]!, tick, this.fighter);
@@ -401,6 +437,13 @@ export class ClientPredictor {
     if (firstStep) {
       if (matchedBaseCp !== null && !isHostTeleport) restoreCheckpoint(matchedBaseCp, this.fighter);
       applySnapshotFighter(res.state, this.fighter);
+      if (landedHostHit) {
+        this.fighter.chaseDodgeWindow = CHASE_DODGE_WINDOW_FRAMES;
+        if (this.fighter.state === FighterState.Attack) {
+          this.fighter.moveHitConnected = true;
+          this.fighter.moveHitLanded = true;
+        }
+      }
     }
     return res;
   }

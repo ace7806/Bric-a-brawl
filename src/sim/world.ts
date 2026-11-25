@@ -7,6 +7,7 @@ import {
   getMoveHitbox,
   resolveStrike,
 } from './combat';
+import { CHASE_DODGE_WINDOW_FRAMES, SDI_MAX_NUDGES } from './combat-kinematics';
 import { getArenaSpec, getGameData, getMoveSpec } from './data';
 import {
   ChunkState,
@@ -174,6 +175,10 @@ export class SimWorld {
     const nextMoveHits = (prevMoveHits === undefined ? 0 : prevMoveHits) + 1;
     defender.comboHitsByMove.set(rec.moveId, nextMoveHits);
 
+    // Unblocked hit enables on-hit IASA combo cancels & Brawlhalla-style Chase-Dodge window
+    attacker.moveHitLanded = true;
+    attacker.chaseDodgeWindow = CHASE_DODGE_WINDOW_FRAMES;
+
     const launchSpd = Math.hypot(rec.launchX, rec.launchY);
     const steerableDeg = applyLaunchSteering(rec.angle, rec.attackerFacing > 0, decodeInputDir(defender.lastInputMask));
     const rad = steerableDeg * DEG_TO_RAD;
@@ -182,6 +187,10 @@ export class SimWorld {
     defender.vx = 0;
     defender.vy = 0;
     defender.hitstunFrames = computeHitstun(launchSpd, defender.comboCount, nextMoveHits - 1);
+    defender.sdiNudgesLeft = SDI_MAX_NUDGES;
+    // Smash Ultimate rule: getting hit refreshes air-dodge & wall-jump (double jump remains conserved)
+    defender.airDodgesLeft = 1;
+    defender.wallJumpsLeft = 1;
     defender.lastHitBySlot = attacker.slot;
     defender.lastHitByMove = rec.moveId;
     defender.lastHitByGadget = GadgetId.None;
@@ -363,6 +372,9 @@ export class SimWorld {
           defender.blockstunFrames = res.blockstun;
           const pushDir = attacker.x <= defender.x ? 1 : -1;
           defender.kbVx = pushDir * res.pushbackSpeed;
+          if ((attacker.flags & FighterFlag.Grounded) !== 0 && move.moveClass !== MoveClass.Special) {
+            attacker.vx = -pushDir * Math.min(4.2, res.pushbackSpeed * 0.35);
+          }
           attacker.hitstopFrames = res.hitstop;
           defender.hitstopFrames = res.hitstop;
           events.push({ tick: this.tick, kind: SimEventKind.Block, a: attacker.slot, b: defender.slot, c: Math.round(res.damage * 10), d: move.id });
