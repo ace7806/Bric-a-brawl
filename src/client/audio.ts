@@ -61,7 +61,6 @@ export class AudioEngine {
   private readonly busVolumes: Record<AudioBusName, number> = { effects: 1.0, music: 0.75, auctioneer: 0.9, ui: 0.85 };
   private muted = false;
   private unlocked = false;
-  private onUnlockChange: ((unlocked: boolean) => void) | null = null;
   private pendingSound: { readonly id: SoundId; readonly opts: PlaySoundOptions } | null = null;
   private activeVoices = 0;
   private readonly perSoundActive = new Map<SoundId, number>();
@@ -83,10 +82,6 @@ export class AudioEngine {
     for (const ev of UNLOCK_EVENTS) {
       window.removeEventListener(ev, this.onGesture, { capture: true });
     }
-  }
-
-  public setOnUnlockChange(cb: ((unlocked: boolean) => void) | null): void {
-    this.onUnlockChange = cb;
   }
 
   public getAudioContextState(): AudioContextState | 'uninitialized' {
@@ -155,9 +150,6 @@ export class AudioEngine {
     const wasUnlocked = this.unlocked;
     this.unlocked = true;
     this.detachUnlockListeners();
-    if (!wasUnlocked) {
-      this.onUnlockChange?.(true);
-    }
 
     const pending = this.pendingSound;
     this.pendingSound = null;

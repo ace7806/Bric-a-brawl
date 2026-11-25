@@ -164,7 +164,6 @@ export class SimWorld {
 
   private applyPendingHitLaunch(attacker: FighterRuntime, defender: FighterRuntime, rec: PendingHitRecord, events: SimEvent[]): void {
     const { tuning } = getGameData();
-    const defStats = getEffectiveStats(defender);
     const atkStats = getEffectiveStats(attacker);
     const move = getMoveSpec(attacker.id, rec.moveId);
 
@@ -211,7 +210,6 @@ export class SimWorld {
         damageChunk(this.rapier, this.rapierWorld, this.island, ci, move.bonusCrack * atkStats.crackMult, CrackSource.Move, this.config.fragile, this.tick, this.rng, events);
       }
     }
-    void defStats;
     events.push({ tick: this.tick, kind: SimEventKind.Hit, a: attacker.slot, b: defender.slot, c: Math.round(rec.damage * 10), d: rec.moveId });
     events.push({ tick: this.tick, kind: SimEventKind.Launch, a: attacker.slot, b: defender.slot, c: Math.round(launchSpd * 8), d: rec.moveId });
   }

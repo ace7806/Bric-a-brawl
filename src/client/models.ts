@@ -75,21 +75,34 @@ function extractBoneRig(fighterId: FighterId, skeleton: THREE.Skeleton): Fighter
   const body = findBoneSlot(bs, FIGHTER_BODY_BONE[fighterId]);
   if (!body) throw new InvariantError(ErrorCode.MissingRequiredEntry, `Missing body bone for fighter ${fighterId}`);
   const prefix = FIGHTER_BODY_BONE[fighterId].split('_')[0]!;
+
+  // GLB export emits flat sibling bones; reparent limbs & accessories under body bone so body
+  // lunge, squash, lean, spins, and hitstop rattle move the whole fighter cohesively without detached parts.
+  const attachChild = (name: string): BoneSlot | null => {
+    const b = bs.find((bn) => bn.name === name);
+    if (!b) return null;
+    if (b.parent !== body.bone) {
+      b.position.sub(body.restPos);
+      body.bone.add(b);
+    }
+    return { bone: b, restPos: b.position.clone(), restQuat: b.quaternion.clone() };
+  };
+
   return {
     fighterId,
     body,
-    lid: findBoneSlot(bs, `${prefix}_lid`),
-    head: findBoneSlot(bs, `${prefix}_head`),
-    hat: findBoneSlot(bs, `${prefix}_hat`),
-    rod: findBoneSlot(bs, `${prefix}_rod`),
-    handF: findBoneSlot(bs, `${prefix}_handF`),
-    handB: findBoneSlot(bs, `${prefix}_handB`),
-    footF: findBoneSlot(bs, `${prefix}_footF`),
-    footB: findBoneSlot(bs, `${prefix}_footB`),
-    hoofFL: findBoneSlot(bs, `${prefix}_hoofFL`),
-    hoofFR: findBoneSlot(bs, `${prefix}_hoofFR`),
-    hoofBL: findBoneSlot(bs, `${prefix}_hoofBL`),
-    hoofBR: findBoneSlot(bs, `${prefix}_hoofBR`),
+    lid: attachChild(`${prefix}_lid`),
+    head: attachChild(`${prefix}_head`),
+    hat: attachChild(`${prefix}_hat`),
+    rod: attachChild(`${prefix}_rod`),
+    handF: attachChild(`${prefix}_handF`),
+    handB: attachChild(`${prefix}_handB`),
+    footF: attachChild(`${prefix}_footF`),
+    footB: attachChild(`${prefix}_footB`),
+    hoofFL: attachChild(`${prefix}_hoofFL`),
+    hoofFR: attachChild(`${prefix}_hoofFR`),
+    hoofBL: attachChild(`${prefix}_hoofBL`),
+    hoofBR: attachChild(`${prefix}_hoofBR`),
   };
 }
 
@@ -126,6 +139,7 @@ export function instantiateFighterRig(
     throw new InvariantError(ErrorCode.InvariantViolation, `Cloned fighter ${fighterId} lacks SkinnedMesh`);
   }
   const rig = extractBoneRig(fighterId, (skinned as THREE.SkinnedMesh).skeleton);
+  (skinned as THREE.SkinnedMesh).updateMatrixWorld(true);
   const spec = getFighterSpec(fighterId);
   const scale = fighterId === FighterId.Nesta && spec.nestaSizes ? spec.nestaSizes.get(NestaSize.Mid)!.scale : 1.0;
   return { group, rig, material, scale };

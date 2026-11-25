@@ -104,7 +104,7 @@ function buildRecipeMeta() {
   const soundMap = new Map<SoundId, RawSoundRecipe>();
   const aucMap = new Map<AuctioneerLineId, RawAuctioneerRecipe>();
 
-  for (let i = 0; i <= SoundId.ErrorKnock; i++) {
+  for (let i = 0; i <= SoundId.ChargePulse; i++) {
     const entry = rawSounds[String(i)];
     assert(entry !== undefined, ErrorCode.MissingRequiredEntry, `Missing audio recipe for SoundId.${i}`);
     assertFinite(entry.targetMs, `recipes.sounds[${i}].targetMs`);
@@ -306,6 +306,7 @@ function renderSound(r: RawSoundRecipe, sr: number): Float32Array {
       addFilteredNoise(buf, sr, 0, 0.004, r.clickHz ?? 3200, r.clickHz ?? 3200, 1.8, r.clickGain ?? 0.25, rng);
       addModal(buf, sr, 0, r.baseHz ?? 1200, PARTIALS[mat], 0.75, r.decayScale ?? 1.0);
       addModal(buf, sr, gap, r.baseHz2 ?? 1400, PARTIALS[mat], 0.65, (r.decayScale ?? 1.0) * 0.9);
+      if (r.subHz0 && r.subHz1 && r.subGain) addSubSweep(buf, sr, r.subHz0, r.subHz1, durSec * 0.5, r.subGain);
       break;
     }
     case 'shatter': {

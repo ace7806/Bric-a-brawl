@@ -185,41 +185,58 @@ function startMove(f: FighterRuntime, moveId: MoveId, clean: boolean, ctx: Fight
   f.state = FighterState.Attack; f.stateFrame = 0; f.activeMove = moveId; f.moveFrame = 0;
   f.moveHitConnected = false; f.moveHitIds.length = 0; f.moveIsClean = clean;
   f.heavyChargeFrames = 0; f.steepChargeFrames = 0;
-  if ((f.flags & FighterFlag.Grounded) !== 0 && moveId !== MoveId.Dash && moveId !== MoveId.Sspec) f.vx = 0;
+  if ((f.flags & FighterFlag.Grounded) !== 0) {
+    if (moveId === MoveId.Dash) {
+      const facing = (f.flags & FighterFlag.FacingRight) !== 0 ? 1 : -1;
+      const stats = getEffectiveStats(f);
+      f.vx = facing * Math.max(Math.abs(f.vx), stats.dash * 0.92);
+    } else if (moveId !== MoveId.Sspec) {
+      // Preserve partial run/dash momentum so grounded attacks slide naturally like Smash tilts/smashes
+      f.vx *= 0.55;
+    }
+  }
   FIGHTER_KITS[f.id].onMoveStart?.(f, moveId, ctx);
 }
 
 function selectMove(f: FighterRuntime, dir: InputDir, bit: InputBit, grounded: boolean): { moveId: MoveId; clean: boolean } {
+  const hx = dirHx(dir);
   if (bit === InputBit.Special) {
     if (f.lastMotion === MotionInput.Dp623) return { moveId: MoveId.Uspec, clean: true };
     if (f.lastMotion === MotionInput.Qcf236) return { moveId: MoveId.Sspec, clean: true };
     if (f.lastMotion === MotionInput.Qcb214) return { moveId: MoveId.Dspec, clean: true };
     if (isUpDir(dir)) {
-      const hx = dirHx(dir);
       if (hx !== 0) setFacing(f, hx > 0);
       return { moveId: MoveId.Uspec, clean: false };
     }
-    if (isDownDir(dir)) return { moveId: MoveId.Dspec, clean: false };
-    const hx = dirHx(dir);
+    if (isDownDir(dir)) {
+      if (hx !== 0) setFacing(f, hx > 0);
+      return { moveId: MoveId.Dspec, clean: false };
+    }
     if (hx !== 0) { setFacing(f, hx > 0); return { moveId: MoveId.Sspec, clean: false }; }
     return { moveId: MoveId.Nspec, clean: false };
   }
-  const hx = dirHx(dir);
   if (!grounded) {
     const facing = (f.flags & FighterFlag.FacingRight) !== 0 ? 1 : -1;
     return { moveId: isUpDir(dir) ? MoveId.Uair : isDownDir(dir) ? MoveId.Dair : hx !== 0 ? (hx === facing ? MoveId.Fair : MoveId.Bair) : MoveId.Nair, clean: false };
   }
-  if (bit === InputBit.Grab) return { moveId: MoveId.Grab, clean: false };
+  if (bit === InputBit.Grab) {
+    if (hx !== 0) setFacing(f, hx > 0);
+    return { moveId: MoveId.Grab, clean: false };
+  }
   if (bit === InputBit.Heavy) {
+    if (hx !== 0) setFacing(f, hx > 0);
     if (isUpDir(dir)) return { moveId: MoveId.Uheavy, clean: false };
     if (isDownDir(dir)) return { moveId: MoveId.Dheavy, clean: false };
-    if (hx !== 0) setFacing(f, hx > 0);
     return { moveId: MoveId.Fheavy, clean: false };
   }
-  if ((f.state === FighterState.Dash || f.state === FighterState.Run) && hx !== 0) return { moveId: MoveId.Dash, clean: false };
+  if ((f.state === FighterState.Dash || f.state === FighterState.Run) && hx !== 0) {
+    setFacing(f, hx > 0);
+    return { moveId: MoveId.Dash, clean: false };
+  }
+  if (hx !== 0) setFacing(f, hx > 0);
   if (isUpDir(dir)) return { moveId: MoveId.Utilt, clean: false };
   if (isDownDir(dir)) return { moveId: MoveId.Dtilt, clean: false };
-  if (hx !== 0) { setFacing(f, hx > 0); return { moveId: MoveId.Ftilt, clean: false }; }
+  if (hx !== 0) return { moveId: MoveId.Ftilt, clean: false };
   return { moveId: MoveId.Jab1, clean: false };
 }
 
@@ -231,13 +248,14 @@ function stepAttack(f: FighterRuntime, mask: number, ctx: FighterStepContext): v
   if (f.state === FighterState.ChargingHeavy) {
     if (!hasBit(mask, InputBit.Heavy) || ++f.heavyChargeFrames >= input.smashChargeMaxFrames) {
       f.state = FighterState.Attack; f.stateFrame = 0; f.moveFrame = 0;
+    } else {
+      return;
     }
-    return;
   }
 
   f.moveFrame++;
   if (f.moveFrame >= st) {
-    if (move.cancel === 1) {
+    if (move.cancel === 1 && (f.moveHitConnected || f.moveFrame >= st + move.active)) {
       const next = move.id === MoveId.Jab1 ? MoveId.Jab2 : move.id === MoveId.Jab2 && getFighterSpec(f.id).moves.has(MoveId.Jab3) ? MoveId.Jab3 : null;
       if (next !== null && (consumeBuffered(f.buffer, InputBit.Attack, ctx.tick, input.actionBufferFrames) !== null || freshBit(mask, f.prevInputMask, InputBit.Attack))) {
         startMove(f, next, false, ctx); return;
@@ -314,12 +332,12 @@ function handleActionInitiation(f: FighterRuntime, mask: number, dir: InputDir, 
   }
 
   for (const bit of [InputBit.Grab, InputBit.Special, InputBit.Heavy, InputBit.Attack] as const) {
-    if ((bit === InputBit.Grab || bit === InputBit.Heavy) && !grounded) continue;
+    if (bit === InputBit.Grab && !grounded) continue;
     const entry = consumeBuffered(f.buffer, bit, ctx.tick, bufF);
     if (entry !== null || freshBit(mask, f.prevInputMask, bit)) {
       const sel = selectMove(f, entry ? entry.dir : dir, bit, grounded);
       startMove(f, sel.moveId, sel.clean, ctx);
-      if (bit === InputBit.Heavy) f.state = FighterState.ChargingHeavy;
+      if (bit === InputBit.Heavy && grounded) f.state = FighterState.ChargingHeavy;
       return true;
     }
   }
@@ -463,9 +481,16 @@ export function stepFighter(f: FighterRuntime, mask: number, inputTick: number, 
       handleActionInitiation(f, mask, dir, ctx); break;
     case FighterState.JumpSquat:
       if (f.stateFrame >= stats.jumpSquat) {
-        f.vy = jumpVel(stats.gravityScale, !hasBit(mask, InputBit.Jump) || hasBit(mask, InputBit.Attack) ? stats.shortHop : stats.fullHop);
+        const bufF = tuning.input.actionBufferFrames;
+        const bufAtk = consumeBuffered(f.buffer, InputBit.Attack, ctx.tick, bufF);
+        const bufHvy = bufAtk === null ? consumeBuffered(f.buffer, InputBit.Heavy, ctx.tick, bufF) : null;
+        const wantsAerial = bufAtk !== null || bufHvy !== null || hasBit(mask, InputBit.Attack) || hasBit(mask, InputBit.Heavy);
+        f.vy = jumpVel(stats.gravityScale, !hasBit(mask, InputBit.Jump) || wantsAerial ? stats.shortHop : stats.fullHop);
         transitionState(f, FighterState.Airborne);
-        if (hasBit(mask, InputBit.Attack)) startMove(f, selectMove(f, dir, InputBit.Attack, false).moveId, false, ctx);
+        if (wantsAerial) {
+          const aerialDir = bufAtk ? bufAtk.dir : bufHvy ? bufHvy.dir : dir;
+          startMove(f, selectMove(f, aerialDir, InputBit.Attack, false).moveId, false, ctx);
+        }
       }
       break;
     case FighterState.Attack: case FighterState.ChargingHeavy:

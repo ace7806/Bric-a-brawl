@@ -351,28 +351,3 @@ export function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
     }, 'image/png');
   });
 }
-
-export async function copyCanvasPngToClipboard(canvas: HTMLCanvasElement): Promise<void> {
-  assert(
-    typeof navigator !== 'undefined' && navigator.clipboard !== undefined && typeof navigator.clipboard.write === 'function' && typeof ClipboardItem !== 'undefined',
-    ErrorCode.MissingRequiredEntry,
-    'Clipboard image API unavailable',
-  );
-  const blob = await canvasToPngBlob(canvas);
-  await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-}
-
-export async function downloadCanvasPng(canvas: HTMLCanvasElement, filename: string): Promise<void> {
-  assert(filename.trim().length > 0, ErrorCode.InvariantViolation, 'downloadCanvasPng requires non-empty filename');
-  assert(typeof document !== 'undefined', ErrorCode.MissingRequiredEntry, 'document unavailable for downloadCanvasPng');
-  const blob = await canvasToPngBlob(canvas);
-  const url = URL.createObjectURL(blob);
-  try {
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}

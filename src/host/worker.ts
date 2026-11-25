@@ -24,7 +24,7 @@ export enum HostWorkerEvent {
 
 export type HostWorkerInbound =
   | { readonly cmd: HostWorkerCmd.Init }
-  | { readonly cmd: HostWorkerCmd.StartMatch; readonly config: HostEngineConfig }
+  | { readonly cmd: HostWorkerCmd.StartMatch; readonly config: HostEngineConfig; readonly epoch: number }
   | { readonly cmd: HostWorkerCmd.LocalInput; readonly slot: number; readonly mask: number }
   | { readonly cmd: HostWorkerCmd.ClientPacket; readonly slot: number; readonly packet: InputPacket }
   | { readonly cmd: HostWorkerCmd.StopMatch }
@@ -34,8 +34,10 @@ export type HostWorkerOutbound =
   | { readonly event: HostWorkerEvent.Ready }
   | {
       readonly event: HostWorkerEvent.Tick;
+      readonly epoch: number;
       readonly tick: number;
       readonly snapshotBytes: Uint8Array | null;
+      readonly localSnapshotBytes: Uint8Array | null;
       readonly includeWorld: boolean;
       readonly events: readonly SimEvent[];
       readonly roundResult: RoundResult | null;
@@ -50,6 +52,7 @@ const MAX_TICKS_PER_WAKE = 5;
 const WAKE_INTERVAL_MS = 4;
 
 let sim: HostSimulation | null = null;
+let currentEpoch = 0;
 let timerId: ReturnType<typeof setInterval> | null = null;
 let lastWakeMs = 0;
 let accumMs = 0;
@@ -111,19 +114,24 @@ function stepLoop(): void {
       if (hitCap) accumMs = 0;
 
       const bytes = out.snapshotBytes;
-      const transfer = bytes && bytes.buffer instanceof ArrayBuffer ? [bytes.buffer] : undefined;
+      const localBytes = out.localSnapshotBytes;
+      const transfer: Transferable[] = [];
+      if (bytes && bytes.buffer instanceof ArrayBuffer) transfer.push(bytes.buffer);
+      if (localBytes && localBytes.buffer instanceof ArrayBuffer) transfer.push(localBytes.buffer);
       postEvent(
         {
           event: HostWorkerEvent.Tick,
+          epoch: currentEpoch,
           tick: out.tick,
           snapshotBytes: bytes,
+          localSnapshotBytes: localBytes,
           includeWorld: out.includeWorld,
           events: out.events,
           roundResult: out.roundResult,
           struggling: out.struggling,
           stalled: hitCap,
         },
-        transfer,
+        transfer.length > 0 ? transfer : undefined,
       );
       if (out.finished) {
         stopLoop();
@@ -147,6 +155,7 @@ async function handleMessage(msg: HostWorkerInbound): Promise<void> {
       return;
     case HostWorkerCmd.StartMatch:
       stopLoop();
+      currentEpoch = msg.epoch;
       await initPhysics();
       stopLoop();
       sim = new HostSimulation(msg.config);

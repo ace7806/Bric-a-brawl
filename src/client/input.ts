@@ -173,6 +173,8 @@ export class InputCollector {
   private touchDir: InputDir = InputDir.Neutral;
   private touchTilt = false;
   private touchBits = 0;
+  private latchedBits = 0;
+  private latchedDir: InputDir = InputDir.Neutral;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     const target = e.target as HTMLElement | null;
@@ -181,8 +183,25 @@ export class InputCollector {
     if (!e.repeat) {
       if (e.code === this.bindings[KeyAction.Left]) this.lastHorizontal = -1;
       else if (e.code === this.bindings[KeyAction.Right]) this.lastHorizontal = 1;
+      for (const action of ALL_KEY_ACTIONS) {
+        if (this.bindings[action] === e.code) {
+          const bit = actionToBit(action);
+          if (bit !== InputBit.None) this.latchedBits |= bit;
+          break;
+        }
+      }
     }
     this.pressed.add(e.code);
+    if (!e.repeat) {
+      const snapDir = resolveOppositeDirections(
+        this.pressed.has(this.bindings[KeyAction.Left]),
+        this.pressed.has(this.bindings[KeyAction.Right]),
+        this.pressed.has(this.bindings[KeyAction.Up]),
+        this.pressed.has(this.bindings[KeyAction.Down]),
+        this.lastHorizontal,
+      );
+      if (snapDir !== InputDir.Neutral) this.latchedDir = snapDir;
+    }
   };
 
   private readonly onKeyUp = (e: KeyboardEvent): void => {
@@ -192,6 +211,8 @@ export class InputCollector {
   private readonly onBlur = (): void => {
     this.pressed.clear();
     this.lastHorizontal = 0;
+    this.latchedBits = 0;
+    this.latchedDir = InputDir.Neutral;
     this.clearTouch();
   };
 
@@ -214,6 +235,8 @@ export class InputCollector {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     this.pressed.clear();
+    this.latchedBits = 0;
+    this.latchedDir = InputDir.Neutral;
     this.clearTouch();
     this.attached = false;
   }
@@ -226,18 +249,25 @@ export class InputCollector {
     assert(Number.isInteger(dir) && dir >= InputDir.Neutral && dir <= InputDir.UpLeft, ErrorCode.InvalidEnumValue, `Invalid InputDir: ${String(dir)}`);
     this.touchDir = dir;
     this.touchTilt = isTilt;
+    if (dir !== InputDir.Neutral) this.latchedDir = dir;
   }
 
   public setTouchBit(bit: InputBit, active: boolean): void {
     assert((bit & InputBit.DirMask) === 0 && (bit & ~0xffff) === 0, ErrorCode.InvalidEnumValue, `Invalid InputBit: ${String(bit)}`);
-    if (active) this.touchBits |= bit;
-    else this.touchBits &= ~bit;
+    if (active) {
+      if ((this.touchBits & bit) === 0) this.latchedBits |= bit;
+      this.touchBits |= bit;
+    } else {
+      this.touchBits &= ~bit;
+    }
   }
 
   public clearTouch(): void {
     this.touchDir = InputDir.Neutral;
     this.touchTilt = false;
     this.touchBits = 0;
+    this.latchedBits = 0;
+    this.latchedDir = InputDir.Neutral;
   }
 
   public getBindings(): KeyBindingMap {
@@ -317,6 +347,14 @@ export class InputCollector {
       if (this.touchTilt) bits |= InputBit.Tilt;
     }
     bits |= this.touchBits;
+
+    // Merge latched rising presses from brief taps between frames, then clear latch
+    if (this.latchedBits !== 0) {
+      bits |= this.latchedBits;
+      if (dir === InputDir.Neutral && this.latchedDir !== InputDir.Neutral) dir = this.latchedDir;
+    }
+    this.latchedBits = 0;
+    this.latchedDir = InputDir.Neutral;
 
     // Optional tap-jump
     if (this.tapJump && (dir === InputDir.Up || dir === InputDir.UpLeft || dir === InputDir.UpRight)) {

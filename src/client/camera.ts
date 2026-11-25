@@ -39,6 +39,9 @@ export class CameraController {
   private readonly wSpring: SpringState;
   private readonly yawSpring: SpringState = { value: 0, vel: 0 };
   private readonly rollSpring: SpringState = { value: 0, vel: 0 };
+  private readonly kickXSpring: SpringState = { value: 0, vel: 0 };
+  private readonly kickYSpring: SpringState = { value: 0, vel: 0 };
+  private readonly zoomPunchSpring: SpringState = { value: 0, vel: 0 };
   private trauma = 0;
   private shakePhase = 0;
   private shakeScale = 1.0;
@@ -65,6 +68,23 @@ export class CameraController {
     this.trauma = clamp(this.trauma + Math.max(0, amount), 0, 1);
   }
 
+  /** Directional Smash impact punch + subtle zoom-in impulse (scales cleanly with shakeScale). */
+  public kick(dirX: number, dirY: number, strength: number, zoomPunch = 0): void {
+    assertFinite(dirX, 'camera.kick.dirX');
+    assertFinite(dirY, 'camera.kick.dirY');
+    assertFinite(strength, 'camera.kick.strength');
+    assertFinite(zoomPunch, 'camera.kick.zoomPunch');
+    const len = Math.hypot(dirX, dirY);
+    const nx = len > 1e-4 ? dirX / len : 1;
+    const ny = len > 1e-4 ? dirY / len : 0;
+    const s = Math.max(0, strength) * this.shakeScale;
+    this.kickXSpring.vel += nx * s * 18;
+    this.kickYSpring.vel += ny * s * 14;
+    if (zoomPunch > 0) {
+      this.zoomPunchSpring.vel -= zoomPunch * this.shakeScale * 22;
+    }
+  }
+
   public reset(arenaId: ArenaId): void {
     const spec = getArenaSpec(arenaId);
     const cam = getGameData().tuning.camera;
@@ -80,6 +100,12 @@ export class CameraController {
     this.yawSpring.vel = 0;
     this.rollSpring.value = 0;
     this.rollSpring.vel = 0;
+    this.kickXSpring.value = 0;
+    this.kickXSpring.vel = 0;
+    this.kickYSpring.value = 0;
+    this.kickYSpring.vel = 0;
+    this.zoomPunchSpring.value = 0;
+    this.zoomPunchSpring.vel = 0;
     this.trauma = 0;
     this.launchHoldTicks = 0;
     this.launchDir = 0;
@@ -150,7 +176,8 @@ export class CameraController {
 
     const x = stepCriticallyDamped(this.xSpring, targetX, cam.posOmega, safeDt);
     const y = stepCriticallyDamped(this.ySpring, targetY, cam.posOmega, safeDt);
-    const width = stepCriticallyDamped(this.wSpring, targetWidth, cam.zoomOmega, safeDt);
+    const zoomPunch = clamp(stepCriticallyDamped(this.zoomPunchSpring, 0, 18, safeDt), -2.8, 0.5);
+    const width = Math.max(12, stepCriticallyDamped(this.wSpring, targetWidth, cam.zoomOmega, safeDt) + zoomPunch);
 
     const midX = (bounds.minX + bounds.maxX) * 0.5;
     const halfSpan = Math.max(1, (bounds.maxX - bounds.minX) * 0.5);
@@ -167,12 +194,14 @@ export class CameraController {
     const dist = (width * 0.5) / hHalfTan;
     const pitchRad = cam.pitchDeg * DEG2RAD;
 
-    // Trauma decay + high-frequency deterministic shake
+    // Trauma decay + high-frequency deterministic shake + directional hit kick
     this.trauma = Math.max(0, this.trauma - safeDt * 1.8);
     this.shakePhase += safeDt * 48;
     const shakeAmt = this.trauma * this.trauma * 0.45 * this.shakeScale;
-    const sx = Math.sin(this.shakePhase * 1.7) * shakeAmt;
-    const sy = Math.cos(this.shakePhase * 2.3) * shakeAmt;
+    const kickX = clamp(stepCriticallyDamped(this.kickXSpring, 0, 22, safeDt), -0.9, 0.9);
+    const kickY = clamp(stepCriticallyDamped(this.kickYSpring, 0, 22, safeDt), -0.7, 0.7);
+    const sx = Math.sin(this.shakePhase * 1.7) * shakeAmt + kickX;
+    const sy = Math.cos(this.shakePhase * 2.3) * shakeAmt + kickY;
 
     const camYOffset = -Math.sin(pitchRad) * dist;
     const camZOffset = Math.cos(pitchRad) * dist;
@@ -183,7 +212,7 @@ export class CameraController {
       y + camYOffset + sy,
       camZOffset,
     );
-    camera.lookAt(x + sx * 0.35, y + portraitBiasY + sy * 0.35, 0);
+    camera.lookAt(x + sx * 0.45, y + portraitBiasY + sy * 0.45, 0);
     camera.rotation.z += rollRad;
     camera.updateProjectionMatrix();
 

@@ -16,11 +16,11 @@ import {
 import { polygonCentroid } from '@sim/geometry';
 import type {
   FighterRuntime,
-  HazardZoneRuntime,
   IslandState,
   ProjectileRuntime,
   WorldGadgetRuntime,
 } from '@sim/types';
+import { buildSlashForMove } from './combat-feel';
 import { GlazeFinish, QualityTier } from './enums';
 import {
   GlazeMaterial,
@@ -49,6 +49,13 @@ import {
   createFighterAnimRuntime,
 } from './poses';
 import { VfxSystem } from './vfx';
+
+export interface CombatShowcaseInput {
+  readonly attackerId: FighterId;
+  readonly defenderId: FighterId;
+  readonly moveId: MoveId;
+  readonly phase: 'windup' | 'active' | 'impact' | 'launch';
+}
 
 interface FighterMeshRig {
   readonly slot: number;
@@ -95,7 +102,6 @@ export interface RenderFrameInput {
   readonly island: IslandState;
   readonly worldGadgets: readonly WorldGadgetRuntime[];
   readonly projectiles: readonly ProjectileRuntime[];
-  readonly hazards: readonly HazardZoneRuntime[];
   readonly isLobby: boolean;
   readonly readyPlatterActive: boolean;
   readonly finishBySlot?: ReadonlyMap<number, GlazeFinish>;
@@ -261,7 +267,6 @@ export class GreyboxRenderer {
 
   private rubbleMesh: THREE.InstancedMesh | null = null;
   private projectileMesh: THREE.InstancedMesh | null = null;
-  private hazardMesh: THREE.InstancedMesh | null = null;
   private lobbyPlatter: THREE.Mesh | null = null;
   private lobbyPlatterMat: GlazeMaterial | null = null;
   private lobbyRimMat: GlazeMaterial | null = null;
@@ -364,20 +369,6 @@ export class GreyboxRenderer {
     this.projectileMesh.count = 0;
     this.projectileMesh.frustumCulled = false;
 
-    const hazMat = createGlazeMaterial({
-      matcap,
-      usePaletteAttr: false,
-      baseColor: hexToLinearVec3(pal.world['tea']!),
-      gloss: 0.9,
-      sheen: 0.3,
-      speckle: 0.0,
-      alpha: 0.55,
-    });
-    createGlazeInstancedPatch(hazMat);
-    this.hazardMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.0, 1.0, 0.25, 14), hazMat, 8);
-    this.hazardMesh.count = 0;
-    this.hazardMesh.frustumCulled = false;
-
     const boneVec = hexToLinearVec3(pal.neutrals['bone']!);
     this.lobbyBoneVec.copy(boneVec);
     this.lobbyOkVec.copy(hexToLinearVec3(pal.ui['ok']!));
@@ -425,7 +416,7 @@ export class GreyboxRenderer {
     this.localMarkerMesh.visible = false;
     this.localMarkerMesh.frustumCulled = false;
 
-    this.worldGroup.add(this.rubbleMesh, this.projectileMesh, this.hazardMesh, this.lobbyPlatter, this.localMarkerMesh);
+    this.worldGroup.add(this.rubbleMesh, this.projectileMesh, this.lobbyPlatter, this.localMarkerMesh);
     this.applyTierBackdropAndMaterials();
   }
 
@@ -861,13 +852,26 @@ export class GreyboxRenderer {
         applyFighterPose(rig.inst.rig, rig.anim, f, dt, this.simTimeSec, facingRight, grounded, isHitstop);
         rig.inst.group.rotation.y = rig.anim.facingYaw;
 
+        const isVictimHit =
+          f.state === FighterState.Hitstun ||
+          f.state === FighterState.Tumble ||
+          f.state === FighterState.GuardStun ||
+          f.state === FighterState.GuardBreak ||
+          f.state === FighterState.ParryStun;
+        const isChargingHeavy = f.state === FighterState.ChargingHeavy;
+        const chargePulse = isChargingHeavy ? 0.5 + 0.5 * Math.sin(this.simTimeSec * 28) : 0;
+        const isHeavySwing =
+          f.state === FighterState.Attack &&
+          (f.activeMove === MoveId.Fheavy || f.activeMove === MoveId.Uheavy || f.activeMove === MoveId.Dheavy);
+
         const u = rig.inst.material.uniforms;
         u.uSpeckle.value = isLow ? 0 : finish === GlazeFinish.SpeckledStone ? 1.6 : 1.0;
         u.uCrack.value = isLow
           ? 0
           : Math.max(finish === GlazeFinish.Crackle || finish === GlazeFinish.Kintsugi ? 0.85 : 0, Math.min(1, f.damage / 150));
-        u.uGilt.value = f.gilt >= 100 ? 0.85 : finish === GlazeFinish.RoyalGilt ? 0.85 : finish === GlazeFinish.GoldRim ? 0.45 : 0;
-        u.uFlash.value = f.hitstopFrames > 0 ? 0.85 : 0;
+        const baseGilt = f.gilt >= 100 ? 0.85 : finish === GlazeFinish.RoyalGilt ? 0.85 : finish === GlazeFinish.GoldRim ? 0.45 : 0;
+        u.uGilt.value = Math.min(1.0, Math.max(baseGilt, isChargingHeavy ? 0.55 + chargePulse * 0.45 : isHeavySwing ? 0.48 : 0));
+        u.uFlash.value = f.hitstopFrames > 0 ? (isVictimHit ? 0.92 : 0.34) : isChargingHeavy ? 0.14 + chargePulse * 0.16 : 0;
         u.uMatte.value = invuln ? 0.8 : finish === GlazeFinish.MatteBisque ? 0.85 : 0;
       }
 
@@ -919,7 +923,7 @@ export class GreyboxRenderer {
       prop.group.scale.setScalar(g.gadgetId === GadgetId.Toaster ? 1.15 : 1.0);
     }
 
-    // Instanced rubble, projectiles, hazards
+    // Instanced rubble & projectiles
     if (this.rubbleMesh) {
       const n = Math.min(input.island.rubble.length, 16);
       for (let i = 0; i < n; i++) {
@@ -946,20 +950,6 @@ export class GreyboxRenderer {
       }
       this.projectileMesh.count = n;
       if (n > 0) this.projectileMesh.instanceMatrix.needsUpdate = true;
-    }
-
-    if (this.hazardMesh) {
-      const n = Math.min(input.hazards.length, 8);
-      for (let i = 0; i < n; i++) {
-        const h = input.hazards[i]!;
-        this.dummy.position.set(h.x, h.y + 0.15, 0);
-        this.dummy.rotation.set(0, 0, 0);
-        this.dummy.scale.set(h.radius, 1, h.radius);
-        this.dummy.updateMatrix();
-        this.hazardMesh.setMatrixAt(i, this.dummy.matrix);
-      }
-      this.hazardMesh.count = n;
-      if (n > 0) this.hazardMesh.instanceMatrix.needsUpdate = true;
     }
 
     this.vfx.step(dt);
@@ -1052,7 +1042,6 @@ export class GreyboxRenderer {
     if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
     if (this.rubbleMesh) this.rubbleMesh.count = 0;
     if (this.projectileMesh) this.projectileMesh.count = 0;
-    if (this.hazardMesh) this.hazardMesh.count = 0;
 
     // P2 Grog oxblood (slot 1) at (5.9, 0)
     placeShowcaseFighter(FighterId.Grog, 1, 5.9, 0.0, true, 0, FighterState.Attack, MoveId.Uheavy);
@@ -1208,7 +1197,6 @@ export class GreyboxRenderer {
       if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
       if (this.rubbleMesh) this.rubbleMesh.count = 0;
       if (this.projectileMesh) this.projectileMesh.count = 0;
-      if (this.hazardMesh) this.hazardMesh.count = 0;
 
       const lookY = arenaId === ArenaId.HighTea ? 3.8 : 1.4;
       const distZ = arenaId === ArenaId.Saucer ? 20 : 28;
@@ -1221,6 +1209,153 @@ export class GreyboxRenderer {
     }
 
     throw new InvariantError(ErrorCode.InvalidEnumValue, `Unknown showcase kind: ${String(kind)}`);
+  }
+
+  /**
+   * Combat Feel Evaluation Showcase: renders a close-up deterministic attacker vs defender
+   * keyframe (windup / active / impact / launch) with real bone poses, hit-flash, slash arc, and sparks.
+   */
+  public renderCombatShowcase(opts: CombatShowcaseInput): void {
+    assert(this.assets !== null, ErrorCode.InvariantViolation, 'renderCombatShowcase() requires initAssets()');
+    this.clearShowcase();
+    this.releaseAllGadgetProps();
+    this.vfx.clear();
+
+    const pal = getGameData().palette;
+    this.worldGroup.visible = true;
+    this.showcaseGroup.visible = true;
+    this.syncArena(ArenaId.Willow);
+    for (const c of this.cloudMeshes) c.visible = true;
+    for (const rig of this.fighterRigs.values()) rig.group.visible = false;
+    if (this.lobbyPlatter) this.lobbyPlatter.visible = false;
+    if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
+    if (this.rubbleMesh) this.rubbleMesh.count = 0;
+    if (this.projectileMesh) this.projectileMesh.count = 0;
+
+    const willow = getArenaSpec(ArenaId.Willow);
+    for (let i = 0; i < willow.chunks.length; i++) {
+      const ch = willow.chunks[i]!;
+      const [cx, cy] = polygonCentroid(ch.poly);
+      const mesh = this.chunkMeshes[i];
+      if (!mesh) continue;
+      mesh.visible = true;
+      mesh.position.set(cx, cy, 0);
+      mesh.rotation.z = 0;
+      const mat = mesh.material as GlazeMaterial;
+      mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
+      mat.uniforms.uCrack.value = 0;
+    }
+
+    const atkSpec = getFighterSpec(opts.attackerId);
+    const moveSpec = atkSpec.moves.get(opts.moveId)!;
+    const isHeavy = moveSpec.damage >= 11;
+    const atkHex = pal.players[0]!.hex;
+    const defHex = pal.players[1]!.hex;
+
+    const atkInst = instantiateFighterRig(this.assets, opts.attackerId, atkHex, GlazeFinish.Standard);
+    const defInst = instantiateFighterRig(this.assets, opts.defenderId, defHex, GlazeFinish.Standard);
+    const atkAnim = createFighterAnimRuntime(0);
+    const defAnim = createFighterAnimRuntime(1);
+    atkAnim.facingYaw = FACING_RIGHT_YAW;
+    defAnim.facingYaw = FACING_LEFT_YAW;
+
+    const st = Math.max(2, moveSpec.startup);
+    const atkFrame =
+      opts.phase === 'windup'
+        ? Math.max(1, Math.floor(st * 0.65))
+        : opts.phase === 'active'
+          ? st + 1
+          : opts.phase === 'impact'
+            ? st + 1
+            : st + moveSpec.active + 4;
+
+    const atkX = -1.12;
+    const defX = opts.phase === 'launch' ? 2.05 : 1.08;
+    const defY = opts.phase === 'launch' ? 1.55 : 0;
+    const defState =
+      opts.phase === 'impact'
+        ? FighterState.Hitstun
+        : opts.phase === 'launch'
+          ? FighterState.Tumble
+          : FighterState.Idle;
+    const isHitstop = opts.phase === 'impact';
+
+    const atkSnap = {
+      slot: 0, x: atkX, y: 0, vx: 0, vy: 0,
+      state: FighterState.Attack, stateFrame: atkFrame, activeMove: opts.moveId,
+      flags: FighterFlag.FacingRight | FighterFlag.Grounded,
+      damage: 25, guardHp: 60, gilt: 40, stocks: 3,
+      heldGadget: GadgetId.None, heldGadgetAmmo: 0, nestaSize: NestaSize.Mid,
+      hitstopFrames: isHitstop ? 8 : 0,
+    };
+    const defSnap = {
+      slot: 1, x: defX, y: defY, vx: opts.phase === 'launch' ? 22 : 0, vy: opts.phase === 'launch' ? 14 : 0,
+      state: defState, stateFrame: opts.phase === 'launch' ? 8 : 2, activeMove: MoveId.None,
+      flags: opts.phase === 'launch' ? FighterFlag.None : FighterFlag.Grounded,
+      damage: opts.phase === 'windup' || opts.phase === 'active' ? 65 : 82, guardHp: 60, gilt: 30, stocks: 3,
+      heldGadget: GadgetId.None, heldGadgetAmmo: 0, nestaSize: NestaSize.Mid,
+      hitstopFrames: isHitstop ? 8 : 0,
+    };
+
+    applyFighterPose(atkInst.rig, atkAnim, atkSnap, 1 / 60, 0.5, true, true, isHitstop);
+    applyFighterPose(defInst.rig, defAnim, defSnap, 1 / 60, 0.62, false, opts.phase !== 'launch', isHitstop);
+
+    atkInst.group.position.set(atkX, 0, 0);
+    atkInst.group.rotation.y = FACING_RIGHT_YAW;
+    atkInst.group.scale.setScalar(atkInst.scale);
+    defInst.group.position.set(defX, defY, 0);
+    defInst.group.rotation.y = FACING_LEFT_YAW;
+    defInst.group.scale.setScalar(defInst.scale);
+
+    atkInst.material.uniforms.uGilt.value = isHeavy ? 0.55 : 0.12;
+    atkInst.material.uniforms.uFlash.value = isHitstop ? 0.34 : 0;
+    defInst.material.uniforms.uFlash.value = isHitstop ? 0.92 : 0;
+    defInst.material.uniforms.uCrack.value = opts.phase === 'impact' || opts.phase === 'launch' ? 0.65 : 0.35;
+    this.showcaseGroup.add(atkInst.group, defInst.group);
+
+    if (opts.phase === 'active' || opts.phase === 'impact') {
+      const dummyAtk = {
+        ...atkSnap,
+        id: opts.attackerId,
+        moveFrame: atkFrame,
+        moveIsClean: false,
+      } as unknown as FighterRuntime;
+      const slash = buildSlashForMove(dummyAtk, atkHex);
+      if (slash) this.vfx.spawnSlash(slash);
+    }
+
+    if (opts.phase === 'impact') {
+      const cx = atkX * 0.25 + defX * 0.75;
+      const cy = getFighterSpec(opts.defenderId).stats.height * 0.56;
+      if (isHeavy) {
+        this.vfx.spawnKillSpark(cx, cy, 0.85, 0.52);
+      } else {
+        this.vfx.spawnHitSparks(cx, cy, 0.88, 0.45, 10, pal.neutrals['bone']!, pal.accents['gilt_hi'] ?? pal.accents['gilt']!, 14);
+        this.vfx.spawnRing(cx, cy, pal.accents['gilt']!, 1.75, 11);
+      }
+      this.vfx.spawnChips(cx, cy, isHeavy ? 14 : 8, defHex, 13, 0.85, 0.5);
+    } else if (opts.phase === 'launch') {
+      for (let step = 0; step < 6; step++) {
+        const u = step / 5;
+        const tx = 0.65 + (defX - 0.65) * u;
+        const ty = 0.72 + (defY - 0.15) * u;
+        this.vfx.updateRibbon(1, tx, ty, true, defHex);
+      }
+      this.vfx.spawnChips(1.15, 0.95, 10, defHex, 11, 0.85, 0.5);
+    }
+
+    this.vfx.updateBlobShadows([
+      { x: atkX, y: 0, scale: atkInst.scale },
+      ...(opts.phase !== 'launch' ? [{ x: defX, y: 0, scale: defInst.scale }] : []),
+    ]);
+    this.vfx.step(1 / 30);
+    this.vfx.step(1 / 30);
+
+    this.camera.fov = 26;
+    this.camera.position.set(0.45, 2.35, 11.8);
+    this.camera.lookAt(0.45, 1.2, 0);
+    this.camera.updateProjectionMatrix();
+    this.renderer.render(this.scene, this.camera);
   }
 
   public getRenderStats(): { drawCalls: number; triangles: number; gpu: string } {
@@ -1249,7 +1384,6 @@ export class GreyboxRenderer {
     this.cloudMeshes.length = 0;
     if (this.rubbleMesh) disposeObjectTree(this.rubbleMesh);
     if (this.projectileMesh) disposeObjectTree(this.projectileMesh);
-    if (this.hazardMesh) disposeObjectTree(this.hazardMesh);
     if (this.lobbyPlatter) disposeObjectTree(this.lobbyPlatter);
     if (this.localMarkerMesh) disposeObjectTree(this.localMarkerMesh);
     this.skyTexture?.dispose();

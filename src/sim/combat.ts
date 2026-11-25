@@ -259,7 +259,13 @@ export function getMoveHitbox(fighter: FighterRuntime, move: MoveSpec): Capsule 
     return { x0: cx - span, y0: y, x1: cx + span, y1: y, radius: r };
   }
   if (move.id === MoveId.Utilt || move.id === MoveId.Uheavy || move.id === MoveId.Uair || move.id === MoveId.Uspec) {
-    return { x0: cx, y0: cy, x1: cx, y1: cy + span, radius: Math.max(r, width * 0.45) };
+    return {
+      x0: cx + facing * 0.28,
+      y0: cy,
+      x1: cx + facing * 0.14,
+      y1: cy + span,
+      radius: Math.max(r, width * 0.48),
+    };
   }
   if (move.id === MoveId.Dair) {
     return { x0: cx, y0: fighter.y - Math.max(0.1, reach * 0.65 - r), x1: cx, y1: cy, radius: Math.max(r, width * 0.4) };

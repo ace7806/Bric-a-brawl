@@ -1,0 +1,21 @@
+{
+  "generatedAtUtc": "2026-11-25T20:57:08.279Z",
+  "allPassed": true,
+  "live": {
+    "passed": true,
+    "attackLatencyMs": 321,
+    "attackMove": 1,
+    "maxLiveSlashes": 1,
+    "heavyChargeAndReleaseVerified": true
+  },
+  "filmstrips": {
+    "captured": [
+      "evidence/combat-feel/filmstrip-earl-fheavy.png",
+      "evidence/combat-feel/filmstrip-grog-fheavy.png",
+      "evidence/combat-feel/filmstrip-nesta-jab3.png",
+      "evidence/combat-feel/filmstrip-moss-ftilt.png"
+    ],
+    "maxDrawCalls": 30,
+    "maxTriangles": 13162
+  }
+}

@@ -17,13 +17,14 @@ import {
 import { createFighter } from '@sim/fighter';
 import { polygonCentroid } from '@sim/geometry';
 import type {
-  ChunkRuntime, FighterRuntime, HazardZoneRuntime, IslandState, PlatformRuntime,
+  ChunkRuntime, FighterRuntime, IslandState, PlatformRuntime,
   ProjectileRuntime, RoundResult, SimEvent, WorldGadgetRuntime,
 } from '@sim/types';
 import { initPhysics } from '@sim/world';
 import * as THREE from 'three';
 import { type AudioBusName, AudioEngine, fighterPitchScale } from './audio';
 import { CameraController } from './camera';
+import { CombatFeedbackTracker, computeHitContactPoint, triggerHitFeedback } from './combat-feel';
 import { AuctioneerLineId, GlazeFinish, MusicPhase, QualityTier, ScreenId, SoundId, TouchControlsMode } from './enums';
 import { ALL_KEY_ACTIONS, InputCollector, KeyPreset } from './input';
 import { canvasToPngBlob, renderResultsPhotoCanvas, renderSessionCardCanvas } from './photo';
@@ -32,7 +33,7 @@ import {
   loadPlayerProfile, type PlayerProfile, savePlayerProfile,
 } from './progression';
 import { QualityManager } from './quality';
-import { GreyboxRenderer } from './renderer';
+import { type CombatShowcaseInput, GreyboxRenderer } from './renderer';
 import { clampBubbleToViewport, GameUi, SELECTABLE_BOT_KINDS, type ResultsPlayerRow, type SettingsViewState } from './ui';
 
 const DT = 1 / 60;
@@ -72,12 +73,21 @@ export interface DebugApi {
   readonly reduceFlashes: boolean;
   readonly audioState: AudioContextState | 'uninitialized';
   readonly lastInputMask: number;
+  readonly localFighterState: {
+    readonly state: FighterState;
+    readonly activeMove: MoveId;
+    readonly moveFrame: number;
+    readonly hitstopFrames: number;
+    readonly x: number;
+    readonly y: number;
+  } | null;
   resetSnapshotGap(): void;
   setReduceFlashes(reduce: boolean): void;
   startRoundNow(): void;
   setScreen(screen: ScreenId): void;
   renderStyleFrame(): void;
   renderShowcase(kind: 'fighter' | 'arena', id: number): void;
+  renderCombatShowcase(opts: CombatShowcaseInput): void;
   showResultsDemo(): Promise<void>;
   showVersionMismatchDemo(): void;
   getPerfReportJson(): string;
@@ -164,13 +174,14 @@ export class BricABrawlApp {
   private readonly camera = new CameraController();
   private readonly input = new InputCollector();
   private readonly audio = new AudioEngine();
+  private readonly combatFeel = new CombatFeedbackTracker();
   private readonly quality: QualityManager;
   private readonly ui: GameUi;
   private readonly worker: Worker;
   private readonly projVec = new THREE.Vector3();
 
   private clock = new HostClockEstimator();
-  private interp = new RemoteInterpolator();
+  private interp = new RemoteInterpolator(0);
   private clientPredictor: ClientPredictor | null = null;
   private transport: Transport | null = null;
   private session: RoomSession | null = null;
@@ -195,10 +206,8 @@ export class BricABrawlApp {
   private renderFighters: FighterRuntime[] = [];
   private renderGadgets: WorldGadgetRuntime[] = [];
   private renderProjectiles: ProjectileRuntime[] = [];
-  private renderHazards: HazardZoneRuntime[] = [];
   private slotStats = new Map<number, SlotTelemetry>();
   private prevDamageBySlot = new Map<number, number>();
-  private prevMotionBySlot = new Map<number, { state: FighterState; grounded: boolean; vy: number; move: MoveId; stepCd: number }>();
   private prevGiltFullBySlot = new Set<number>();
   private prevRubbleIds = new Set<number>();
   private prevBowlSplit = false;
@@ -236,6 +245,7 @@ export class BricABrawlApp {
   private clientInputTick = 0;
   private lastInputMask = 0;
   private workerRunning = false;
+  private workerMatchEpoch = 0;
   private rafId = 0;
 
   public constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
@@ -490,6 +500,7 @@ export class BricABrawlApp {
   }
 
   private async joinRoom(code: string): Promise<void> {
+    this.workerMatchEpoch++;
     this.postWorker({ cmd: HostWorkerCmd.StopMatch });
     this.workerRunning = false;
     await this.attachTransport(code, false);
@@ -557,10 +568,12 @@ export class BricABrawlApp {
       match: { arenaId, mode, fragile: r.settings.fragile, seed: r.roundSeed, fighters: active.map((s) => ({ slot: s.slot, id: s.fighterId, team: s.team })), enableTierB: r.settings.enableTierB, enableTierC: r.settings.enableTierC, stocksOverride: r.settings.stocks },
       localSlot: this.smokeBotsCount > 0 || lSlot < 0 ? null : lSlot,
       bots,
+      emitLocalEveryTick: this.smokeBotsCount === 0 && lSlot >= 0,
     };
     this.resetMatchTrackers(arenaId, active);
     this.workerRunning = true;
-    this.postWorker({ cmd: HostWorkerCmd.StartMatch, config });
+    const epoch = ++this.workerMatchEpoch;
+    this.postWorker({ cmd: HostWorkerCmd.StartMatch, config, epoch });
   }
 
   private startWorkerSaucer(): void {
@@ -592,11 +605,14 @@ export class BricABrawlApp {
 
   private resetMatchTrackers(arenaId: ArenaId, slots: readonly RoomSlotData[]): void {
     this.clock = new HostClockEstimator();
-    this.interp = new RemoteInterpolator();
+    // Local host has 0ms RTT to its own worker: skip the 66ms remote interpolation buffer for crisp Smash responsiveness!
+    this.interp = new RemoteInterpolator(this.isAuthHost() ? 0 : undefined);
+    this.combatFeel.reset();
     if (this.clientPredictor !== null) {
       this.clientPredictor.dispose();
       this.clientPredictor = null;
     }
+    this.snapshotsReceived = 0;
     this.lastSnapTick = 0;
     this.clientInputTick = 0;
     this.slotStats.clear();
@@ -643,7 +659,6 @@ export class BricABrawlApp {
     }
     this.renderGadgets = [];
     this.renderProjectiles = [];
-    this.renderHazards = [];
     this.camera.reset(arenaId);
   }
 
@@ -651,6 +666,7 @@ export class BricABrawlApp {
     switch (msg.event) {
       case HostWorkerEvent.Ready: break;
       case HostWorkerEvent.Tick:
+        if (msg.epoch !== this.workerMatchEpoch) break;
         this.hostStruggling = msg.struggling;
         if (msg.events.length > 0) {
           if (this.session?.isHost) this.session.broadcastReliable({ kind: NetMessageKind.Events, events: msg.events });
@@ -659,6 +675,8 @@ export class BricABrawlApp {
         if (msg.snapshotBytes !== null) {
           if (this.session?.isHost) this.session.transport.broadcast(ChannelKind.Unreliable, msg.snapshotBytes);
           this.ingestSnapshot(decodeSnapshot(msg.snapshotBytes), performance.now());
+        } else if (msg.localSnapshotBytes !== null) {
+          this.ingestSnapshot(decodeSnapshot(msg.localSnapshotBytes), performance.now());
         }
         if (msg.roundResult !== null) this.handleRoundFinished(msg.roundResult);
         break;
@@ -676,7 +694,9 @@ export class BricABrawlApp {
     const oneWayMs = this.clientPredictor !== null ? this.clientPredictor.observeAckOneWayMs(snap, nowMs) : 0;
     this.clock.onSnapshot(snap.tick, nowMs, oneWayMs);
     this.interp.pushSnapshot(snap, nowMs);
-    this.interp.setInterpDelayMs(this.clock.getInterpDelayMs());
+    if (!this.isAuthHost()) {
+      this.interp.setInterpDelayMs(this.clock.getInterpDelayMs());
+    }
 
     if (this.clientPredictor !== null) {
       this.clientPredictor.reconcileSnapshot(snap);
@@ -693,12 +713,23 @@ export class BricABrawlApp {
     const playFx = (id: SoundId, opts?: { pan?: number; pitchScale?: number; gainScale?: number }) => {
       if (!isTitleScreen) this.audio.play(id, opts);
     };
+
+    // Correlate same-tick Launch speeds with Hit events so heavy/lethal hits fire Kill-Spark & strong camera punch
+    const launchSpeedByPair = new Map<number, number>();
+    for (const ev of events) {
+      if (ev.kind === SimEventKind.Launch) {
+        launchSpeedByPair.set(ev.a * 16 + ev.b, ev.c / 8);
+      }
+    }
+
     for (const ev of events) {
       const f = this.renderFighters.find((x) => x.slot === ev.a);
+      const fb = this.renderFighters.find((x) => x.slot === ev.b);
       const fx = f ? f.x : 0;
       const fy = f ? f.y : 0;
       const pan = Math.max(-0.6, Math.min(0.6, fx / 12));
       const col = pal.players[Math.abs(ev.a) % pal.players.length]!.hex;
+      const defCol = pal.players[Math.abs(ev.b) % pal.players.length]!.hex;
       const pitchScale = f ? fighterPitchScale(f.id, f.nestaSize) : 1.0;
       switch (ev.kind) {
         case SimEventKind.Hit: {
@@ -711,16 +742,33 @@ export class BricABrawlApp {
             this.roundHadHit = true;
             if (!this.prevLastCall && !this.prevSuddenDeath) this.audio.setMusicPhase(MusicPhase.RoundAB);
           }
-          playFx(dmg >= 12 ? SoundId.HitHeavy : dmg >= 6 ? SoundId.HitMid : SoundId.HitLight, { pan, pitchScale });
-          this.renderer.vfx.spawnChips(fx, fy + 0.7, dmg >= 12 ? 10 : 5, col, dmg >= 12 ? 12 : 8);
-          this.renderer.vfx.spawnRing(fx, fy + 0.7, dmg >= 12 ? pal.accents['stamp_red']! : col, dmg >= 12 ? 2.1 : 1.25, dmg >= 12 ? 16 : 10);
-          if (!isTitleScreen) {
-            this.camera.addTrauma(dmg >= 12 ? 0.32 : 0.14);
-            if (dmg >= 15) this.renderer.vfx.triggerImpactFrame(4, nowMs);
-          }
+          const launchSpeed = launchSpeedByPair.get(ev.a * 16 + ev.b) ?? 0;
+          triggerHitFeedback(
+            {
+              attacker: f,
+              defender: fb,
+              damage: dmg,
+              moveId: ev.d as MoveId,
+              launchSpeed,
+              defenderColorHex: defCol,
+              allowLoudFx: !isTitleScreen,
+              nowMs,
+            },
+            this.renderer.vfx,
+            this.camera,
+            this.audio,
+          );
           break;
         }
-        case SimEventKind.Block: playFx(SoundId.Guard, { pan }); this.renderer.vfx.spawnDust(fx, fy + 0.5, 3); break;
+        case SimEventKind.Block: {
+          const contact = computeHitContactPoint(f, fb, ev.d as MoveId);
+          playFx(SoundId.Guard, { pan: Math.max(-0.6, Math.min(0.6, contact.x / 12)) });
+          this.renderer.vfx.spawnHitSparks(contact.x, contact.y, contact.dirX, contact.dirY, 5, pal.neutrals['bone']!, pal.accents['gilt']!, 9);
+          this.renderer.vfx.spawnDust(contact.x, contact.y - 0.15, 3);
+          this.renderer.vfx.spawnRing(contact.x, contact.y, pal.neutrals['bone']!, 1.1, 8);
+          if (!isTitleScreen) this.camera.kick(contact.dirX, 0, 0.14, 0);
+          break;
+        }
         case SimEventKind.Parry: {
           const pst = this.slotStats.get(ev.a);
           if (pst) pst.parriesLanded++;
@@ -728,18 +776,24 @@ export class BricABrawlApp {
             this.roundParriedParriedCork = true;
           }
           playFx(SoundId.Parry, { pan, pitchScale });
+          this.renderer.vfx.spawnHitSparks(fx, fy + 0.8, 0, 1, 10, pal.neutrals['bone']!, pal.accents['gilt_hi'] ?? pal.accents['gilt']!, 14);
           this.renderer.vfx.spawnRing(fx, fy + 0.8, pal.accents['gilt']!, 2.6, 18);
           if (!isTitleScreen) {
             this.renderer.vfx.triggerImpactFrame(3, nowMs);
-            this.camera.addTrauma(0.22);
+            this.camera.addTrauma(0.24);
+            this.camera.kick(0, 0.6, 0.36, 0.35);
           }
           break;
         }
         case SimEventKind.GuardBreak:
           playFx(SoundId.GuardBreak, { pan, pitchScale });
-          this.renderer.vfx.spawnChips(fx, fy + 0.7, 12, pal.neutrals['bone']!, 12);
-          this.renderer.vfx.spawnRing(fx, fy + 0.8, pal.accents['stamp_red']!, 2.4, 16);
-          if (!isTitleScreen) this.camera.addTrauma(0.4);
+          this.renderer.vfx.spawnHitSparks(fx, fy + 0.8, 0, 1, 12, pal.neutrals['bone']!, pal.accents['stamp_red']!, 15);
+          this.renderer.vfx.spawnChips(fx, fy + 0.7, 14, pal.neutrals['bone']!, 13);
+          this.renderer.vfx.spawnRing(fx, fy + 0.8, pal.accents['stamp_red']!, 2.6, 16);
+          if (!isTitleScreen) {
+            this.camera.addTrauma(0.42);
+            this.camera.kick(0, 1, 0.45, 0.4);
+          }
           break;
         case SimEventKind.Grab: playFx(SoundId.HitLight, { pan, pitchScale }); break;
         case SimEventKind.Throw: playFx(SoundId.HitMid, { pan, pitchScale }); break;
@@ -951,12 +1005,11 @@ export class BricABrawlApp {
     const roster = this.roster();
     const screen = this.ui.getScreen();
     const allowInput = !this.ui.isOverlayOpen() && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
-    const mask = allowInput ? this.input.pollMask() : 0;
-    this.lastInputMask = mask;
-
     this.inputAccumMs += dtMs;
     for (let steps = 0; this.inputAccumMs >= DT * 1000 && steps < 4; steps++) {
       this.inputAccumMs -= DT * 1000;
+      const mask = allowInput ? this.input.pollMask() : 0;
+      this.lastInputMask = mask;
       const tick = this.clientInputTick++;
       if (this.session && !this.session.isHost) {
         if (this.clientPredictor !== null) {
@@ -1002,7 +1055,7 @@ export class BricABrawlApp {
     const showSelfMarker = lSlot >= 0 && this.smokeBotsCount === 0 && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
     this.renderer.render({
       fighters: this.renderFighters, island: this.renderIsland, worldGadgets: this.renderGadgets,
-      projectiles: this.renderProjectiles, hazards: this.renderHazards,
+      projectiles: this.renderProjectiles,
       isLobby, readyPlatterActive: isLobby && this.platterHoldTicks > 0, finishBySlot,
       ...(showSelfMarker ? { localSlot: lSlot } : {}),
     }, dtMs / 1000);
@@ -1072,6 +1125,7 @@ export class BricABrawlApp {
           state: pf.state, stateFrame: pf.stateFrame, activeMove: pf.activeMove, moveFrame: pf.moveFrame,
           flags: pf.flags, damage: pf.damage, guardHp: pf.guardHp, gilt: pf.gilt, stocks: pf.stocks,
           heldGadget: pf.heldGadget, heldGadgetAmmo: pf.heldGadgetAmmo, nestaSize: pf.nestaSize,
+          hitstopFrames: pf.hitstopFrames,
           invulnFrames: (pf.flags & FighterFlag.Invuln) !== 0 ? 1 : 0, teaspoonX: pf.x,
         });
       } else {
@@ -1080,6 +1134,7 @@ export class BricABrawlApp {
           activeMove: sf.activeMove, moveFrame: sf.moveFrame, flags: sf.flags, damage: sf.damage,
           guardHp: sf.guardHp, gilt: sf.gilt, stocks: sf.stocks, heldGadget: sf.heldGadget,
           heldGadgetAmmo: sf.heldGadgetAmmo, nestaSize: sf.nestaSize,
+          hitstopFrames: sf.hitstopFrames,
           invulnFrames: (sf.flags & FighterFlag.Invuln) !== 0 ? 1 : 0, teaspoonX: sf.x,
         });
       }
@@ -1091,33 +1146,10 @@ export class BricABrawlApp {
       }
       this.prevDamageBySlot.set(t.slot, t.damage);
 
-      const grounded = (t.flags & FighterFlag.Grounded) !== 0;
-      const prevM = this.prevMotionBySlot.get(t.slot);
-      const pan = Math.max(-0.6, Math.min(0.6, t.x / 12));
-      const pitchScale = fighterPitchScale(t.id, t.nestaSize);
-      let nextStepCd = prevM ? Math.max(0, prevM.stepCd - 1) : 0;
-      if (allowMotionSfx && prevM !== undefined) {
-        if (prevM.grounded && !grounded && t.vy > 2.5 && t.state !== FighterState.Hitstun && t.state !== FighterState.Tumble) {
-          this.audio.play(SoundId.Jump, { pan, pitchScale, gainScale: 0.72 });
-          this.renderer.vfx.spawnDust(t.x, t.y, 3);
-        } else if (!prevM.grounded && !grounded && prevM.vy < 2.0 && t.vy > 6.0 && t.state !== FighterState.Hitstun && t.state !== FighterState.Tumble) {
-          this.audio.play(SoundId.DoubleJump, { pan, pitchScale, gainScale: 0.75 });
-          this.renderer.vfx.spawnRing(t.x, t.y, pal.neutrals['bone']!, 0.95, 10);
-        } else if (!prevM.grounded && grounded && prevM.vy < -3.5) {
-          this.audio.play(SoundId.Land, { pan, pitchScale, gainScale: Math.min(1, Math.abs(prevM.vy) / 14) });
-          this.renderer.vfx.spawnDust(t.x, t.y, 4);
-        } else if (grounded && (t.state === FighterState.Run || t.state === FighterState.Dash) && nextStepCd === 0) {
-          const stepSnd = t.id === FighterId.Grog ? SoundId.StepStone : SoundId.StepChina;
-          this.audio.play(stepSnd, { pan, pitchScale, gainScale: 0.28 });
-          nextStepCd = 15;
-        }
-        if (t.state === FighterState.Attack && t.activeMove !== MoveId.None && (prevM.state !== FighterState.Attack || prevM.move !== t.activeMove)) {
-          const specialSnd = this.specialStartSound(t.id, t.activeMove);
-          if (specialSnd !== null) this.audio.play(specialSnd, { pan, pitchScale, gainScale: 0.85 });
-        }
-      }
-      this.prevMotionBySlot.set(t.slot, { state: t.state, grounded, vy: t.vy, move: t.activeMove, stepCd: nextStepCd });
+      const liveryHex = pal.players[t.slot % pal.players.length]!.hex;
+      this.combatFeel.updateFighter(t, liveryHex, allowMotionSfx, this.renderer.vfx, this.audio);
 
+      const pan = Math.max(-0.6, Math.min(0.6, t.x / 12));
       if (t.gilt >= giltMax && !this.prevGiltFullBySlot.has(t.slot)) {
         this.prevGiltFullBySlot.add(t.slot);
         if (allowMotionSfx) this.audio.play(SoundId.GiltFull, { pan });
@@ -1353,18 +1385,6 @@ export class BricABrawlApp {
     this.ui.setScreen(ScreenId.ConnectionError);
   }
 
-  private specialStartSound(fighterId: FighterId, move: MoveId): SoundId | null {
-    const isSpecial = move === MoveId.Nspec || move === MoveId.Sspec || move === MoveId.Uspec || move === MoveId.Dspec;
-    if (!isSpecial) return null;
-    switch (fighterId) {
-      case FighterId.Earl: return move === MoveId.Uspec ? SoundId.EarlPop : SoundId.EarlPuff;
-      case FighterId.Grog: return move === MoveId.Dspec || move === MoveId.Uspec ? SoundId.GrogStamp : SoundId.GrogSnort;
-      case FighterId.Nesta: return SoundId.NestaPop;
-      case FighterId.Moss: return SoundId.MossCast;
-      default: return assertNever(fighterId, 'specialStartSound');
-    }
-  }
-
   private onGlobalKey(e: KeyboardEvent): void {
     const target = e.target as HTMLElement | null;
     if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
@@ -1441,12 +1461,29 @@ export class BricABrawlApp {
       get reduceFlashes() { return app.reduceFlashes; },
       get audioState() { return app.audio.getAudioContextState(); },
       get lastInputMask() { return app.lastInputMask; },
+      get localFighterState() {
+        const lf = app.renderFighters.find((f) => f.slot === app.localSlot());
+        if (!lf) return null;
+        return {
+          state: lf.state,
+          activeMove: lf.activeMove,
+          moveFrame: lf.moveFrame,
+          hitstopFrames: lf.hitstopFrames,
+          x: lf.x,
+          y: lf.y,
+        };
+      },
       resetSnapshotGap: () => { app.maxSnapshotGapMs = 0; app.lastSnapshotArrivalMs = performance.now(); },
       setReduceFlashes: (r: boolean) => { app.reduceFlashes = r; app.renderer.vfx.setReduceFlashes(r); },
       startRoundNow: () => app.startRoundNow(),
       setScreen: (s: ScreenId) => app.ui.setScreen(s),
       renderStyleFrame: () => app.renderer.renderStyleFrame(),
       renderShowcase: (kind: 'fighter' | 'arena', id: number) => app.renderer.renderShowcase(kind, id),
+      renderCombatShowcase: (opts: CombatShowcaseInput) => {
+        app.staticModePaused = true;
+        app.uiRoot.style.display = 'none';
+        app.renderer.renderCombatShowcase(opts);
+      },
       showResultsDemo: () => app.showResultsDemo(),
       showVersionMismatchDemo: () => app.showVersionMismatchDemo(),
       getPerfReportJson: () => JSON.stringify(app.buildPerfReport()),

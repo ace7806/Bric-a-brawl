@@ -28,12 +28,15 @@ export interface HostEngineConfig {
   readonly match: MatchConfig;
   readonly localSlot?: number | null;
   readonly bots?: ReadonlyMap<number, BotConfig> | Readonly<Record<number, BotConfig>>;
+  /** When true (local browser host worker), emit lightweight fighter snapshots on odd ticks too for 60 Hz zero-lag display. Network broadcast still uses snapshotBytes (30 Hz). */
+  readonly emitLocalEveryTick?: boolean;
 }
 
 export interface HostTickOutput {
   readonly tick: number;
   readonly events: readonly SimEvent[];
   readonly snapshotBytes: Uint8Array | null;
+  readonly localSnapshotBytes: Uint8Array | null;
   readonly snapshotData: SnapshotData | null;
   readonly includeWorld: boolean;
   readonly struggling: boolean;
@@ -64,12 +67,14 @@ export class HostSimulation {
   public readonly bots = new Map<number, BotController>();
   private readonly botRngs = new Map<number, SeededRng>();
   private readonly localSlot: number | null;
+  private readonly emitLocalEveryTick: boolean;
   private readonly normalSnapshotEvery: number;
   private readonly normalWorldEverySnapshots = 2;
   private readonly strugglingSnapshotEvery = 3;
   private readonly strugglingWorldEverySnapshots = 2;
   private readonly maxSlotCount: number;
   private localMask = 0;
+  private readonly localInputQueue: number[] = [];
   private slowTickStreak = 0;
   private struggling = false;
   private snapshotCounter = 0;
@@ -78,6 +83,7 @@ export class HostSimulation {
     this.world = new SimWorld(config.match);
     this.jitter = new InputJitterBuffer();
     this.localSlot = config.localSlot ?? null;
+    this.emitLocalEveryTick = config.emitLocalEveryTick === true;
 
     const { tuning } = getGameData();
     this.normalSnapshotEvery = Math.max(1, Math.round(tuning.tickRate / tuning.net.snapshotHz));
@@ -99,7 +105,10 @@ export class HostSimulation {
   public setLocalInput(slot: number, mask: number): void {
     assert(this.localSlot !== null && slot === this.localSlot, ErrorCode.InvariantViolation, `Slot ${slot} is not the local host slot`);
     assert(Number.isInteger(mask), ErrorCode.InvariantViolation, `Input mask must be an integer: ${mask}`);
-    this.localMask = mask & 0xffff;
+    const clean = mask & 0xffff;
+    this.localMask = clean;
+    if (this.localInputQueue.length >= 4) this.localInputQueue.shift();
+    this.localInputQueue.push(clean);
   }
 
   public ingestClientInput(slot: number, packet: InputPacket): void {
@@ -149,7 +158,8 @@ export class HostSimulation {
 
     for (const f of this.world.fighters) {
       if (f.slot === this.localSlot) {
-        inputs.set(f.slot, this.localMask);
+        const nextMask = this.localInputQueue.length > 0 ? this.localInputQueue.shift()! : this.localMask;
+        inputs.set(f.slot, nextMask);
         continue;
       }
       const bot = this.bots.get(f.slot);
@@ -174,6 +184,7 @@ export class HostSimulation {
 
     let snapshotData: SnapshotData | null = null;
     let snapshotBytes: Uint8Array | null = null;
+    let localSnapshotBytes: Uint8Array | null = null;
     let includeWorld = false;
 
     if (emitSnapshot) {
@@ -181,6 +192,8 @@ export class HostSimulation {
       includeWorld = fullKeyframe || (this.snapshotCounter % worldEvery === 0);
       snapshotData = this.buildSnapshotData(includeWorld, fullKeyframe);
       snapshotBytes = encodeSnapshot(snapshotData, includeWorld);
+    } else if (this.emitLocalEveryTick) {
+      localSnapshotBytes = encodeSnapshot(this.buildSnapshotData(false, false), false);
     }
 
     const roundResult = this.world.getRoundResult();
@@ -188,6 +201,7 @@ export class HostSimulation {
       tick: this.world.tick,
       events,
       snapshotBytes,
+      localSnapshotBytes,
       snapshotData,
       includeWorld,
       struggling: this.struggling,

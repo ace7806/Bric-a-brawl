@@ -312,6 +312,7 @@ export interface InterpolatedFighter {
   readonly heldGadget: GadgetId;
   readonly heldGadgetAmmo: number;
   readonly nestaSize: NestaSize;
+  readonly hitstopFrames: number;
 }
 
 export interface InterpolatedWorldState {
@@ -346,10 +347,10 @@ export class RemoteInterpolator {
   private latestArrivalMs = 0;
   private latestWorldSnap: SnapshotData | null = null;
 
-  public constructor() {
+  public constructor(minInterpMsOverride?: number) {
     const tuning = getGameData().tuning;
     this.tickRate = tuning.tickRate;
-    this.minInterpMs = tuning.net.interpDelayMs;
+    this.minInterpMs = minInterpMsOverride !== undefined ? Math.max(0, minInterpMsOverride) : tuning.net.interpDelayMs;
     this.fighterSi = new SnapshotInterpolation(tuning.net.snapshotHz);
     this.fighterSi.interpolationBuffer.set(this.minInterpMs);
     this.fighterSi.vault.setMaxSize(WORLD_VAULT_MAX);
@@ -414,26 +415,31 @@ export class RemoteInterpolator {
     const deltaTicks = Math.max(0, Math.round(estimatedHostTick - latest.tick));
 
     const interpFighterPos = new Map<number, { x: number; y: number }>();
-    const fShots = this.fighterSi.vault.get(renderTimeMs);
-    if (fShots && fShots.older && fShots.newer) {
-      const t0 = fShots.newer.time;
-      const t1 = fShots.older.time;
-      const pct = t0 > t1 ? Math.max(0, Math.min(1, (renderTimeMs - t1) / (t0 - t1))) : 1;
-      for (const e of this.fighterSi.interpolate(fShots.newer, fShots.older, pct, 'x y').state) {
-        interpFighterPos.set(Number(e.id), { x: numProp(e, 'x'), y: numProp(e, 'y') });
-      }
-    } else if (renderTimeMs < this.latestArrivalMs) {
-      const closest = this.fighterSi.vault.get(renderTimeMs, true);
-      if (closest && Array.isArray(closest.state)) {
-        for (const e of closest.state) {
+    if (interpDelayMs > 0) {
+      const fShots = this.fighterSi.vault.get(renderTimeMs);
+      if (fShots && fShots.older && fShots.newer) {
+        const t0 = fShots.newer.time;
+        const t1 = fShots.older.time;
+        const pct = t0 > t1 ? Math.max(0, Math.min(1, (renderTimeMs - t1) / (t0 - t1))) : 1;
+        for (const e of this.fighterSi.interpolate(fShots.newer, fShots.older, pct, 'x y').state) {
           interpFighterPos.set(Number(e.id), { x: numProp(e, 'x'), y: numProp(e, 'y') });
+        }
+      } else if (renderTimeMs < this.latestArrivalMs) {
+        const closest = this.fighterSi.vault.get(renderTimeMs, true);
+        if (closest && Array.isArray(closest.state)) {
+          for (const e of closest.state) {
+            interpFighterPos.set(Number(e.id), { x: numProp(e, 'x'), y: numProp(e, 'y') });
+          }
         }
       }
     }
 
     const fighters: InterpolatedFighter[] = latest.fighters.map((f) => {
       const pos = interpFighterPos.get(f.slot);
-      const advancedFrame = f.stateFrame + deltaTicks;
+      const remainingHitstop = Math.max(0, f.hitstopFrames - deltaTicks);
+      // Freeze pose frame while in hitstop so impact frames hold crisply like Smash
+      const frameAdvance = f.hitstopFrames > 0 ? Math.max(0, deltaTicks - f.hitstopFrames) : deltaTicks;
+      const advancedFrame = f.stateFrame + frameAdvance;
       return {
         slot: f.slot,
         x: pos ? pos.x : f.x,
@@ -452,6 +458,7 @@ export class RemoteInterpolator {
         heldGadget: f.heldGadget,
         heldGadgetAmmo: f.heldGadgetAmmo,
         nestaSize: f.nestaSize,
+        hitstopFrames: remainingHitstop,
       };
     });
 

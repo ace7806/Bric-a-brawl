@@ -62,6 +62,9 @@ export enum SoundId {
   PourWhistle = 45,
   BowlSplit = 46,
   ErrorKnock = 47,
+  SwingLight = 48,
+  SwingHeavy = 49,
+  ChargePulse = 50,
 }
 
 export enum AuctioneerLineId {

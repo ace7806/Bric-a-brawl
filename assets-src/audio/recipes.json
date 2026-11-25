@@ -54,9 +54,9 @@
     "2":  { "name": "Jump",          "family": "fm",      "bus": "effects", "targetMs": 90,   "kind": "fm",      "f0": 340, "f1": 510, "modRatio": 1.5, "modIdx": 1.1 },
     "3":  { "name": "DoubleJump",    "family": "fm",      "bus": "effects", "targetMs": 110,  "kind": "fm",      "f0": 440, "f1": 680, "modRatio": 2.0, "modIdx": 1.4, "airHz": 1600, "airGain": 0.22 },
     "4":  { "name": "Land",          "family": "ceramic", "bus": "effects", "targetMs": 120,  "kind": "modal",   "material": "plate", "baseHz": 1320, "decayScale": 0.95, "clickHz": 3000, "clickGain": 0.32, "subHz0": 160, "subHz1": 75, "subGain": 0.14 },
-    "5":  { "name": "HitLight",      "family": "ceramic", "bus": "effects", "targetMs": 70,   "kind": "modal",   "material": "cup",   "baseHz": 1680, "decayScale": 0.85, "clickHz": 3800, "clickGain": 0.36 },
-    "6":  { "name": "HitMid",        "family": "ceramic", "bus": "effects", "targetMs": 110,  "kind": "doubleModal", "material": "plate", "baseHz": 1240, "baseHz2": 1480, "gapMs": 8, "decayScale": 0.95, "clickHz": 3400, "clickGain": 0.3 },
-    "7":  { "name": "HitHeavy",      "family": "ceramic", "bus": "effects", "targetMs": 220,  "kind": "shatter", "material": "plate", "baseHz": 1350, "pieces": 8,  "spanMs": 190, "noiseHz0": 3600, "noiseHz1": 2200 },
+    "5":  { "name": "HitLight",      "family": "ceramic", "bus": "effects", "targetMs": 75,   "kind": "modal",   "material": "cup",   "baseHz": 1680, "decayScale": 0.85, "clickHz": 3800, "clickGain": 0.40, "subHz0": 195, "subHz1": 92, "subGain": 0.14 },
+    "6":  { "name": "HitMid",        "family": "ceramic", "bus": "effects", "targetMs": 120,  "kind": "doubleModal", "material": "plate", "baseHz": 1280, "baseHz2": 1540, "gapMs": 8, "decayScale": 0.95, "clickHz": 3600, "clickGain": 0.38, "subHz0": 190, "subHz1": 74, "subGain": 0.22 },
+    "7":  { "name": "HitHeavy",      "family": "ceramic", "bus": "effects", "targetMs": 240,  "kind": "shatter", "material": "plate", "baseHz": 1380, "pieces": 10, "spanMs": 200, "noiseHz0": 3900, "noiseHz1": 2300, "subHz0": 175, "subHz1": 52, "subGain": 0.28 },
     "8":  { "name": "Guard",         "family": "wood",    "bus": "effects", "targetMs": 90,   "kind": "modal",   "material": "wood",  "baseHz": 520,  "decayScale": 0.62, "clickHz": 1100, "clickGain": 0.28 },
     "9":  { "name": "GuardBreak",    "family": "ceramic", "bus": "effects", "targetMs": 350,  "kind": "shatter", "material": "plate", "baseHz": 1420, "pieces": 14, "spanMs": 310, "noiseHz0": 3800, "noiseHz1": 2100 },
     "10": { "name": "Parry",         "family": "ceramic", "bus": "effects", "targetMs": 1200, "kind": "modal",   "material": "bowl",  "baseHz": 780,  "decayScale": 1.0,  "clickHz": 3900, "clickGain": 0.25 },
@@ -96,7 +96,10 @@
     "44": { "name": "MagnetFire",    "family": "ceramic", "bus": "effects", "targetMs": 400,  "kind": "shatter", "material": "cup",   "baseHz": 1520, "pieces": 14, "spanMs": 340, "noiseHz0": 3600, "noiseHz1": 2400 },
     "45": { "name": "PourWhistle",   "family": "air",     "bus": "effects", "targetMs": 1450, "kind": "air",     "freq0": 1800, "freq1": 2350, "q": 2.5, "whistle0": 1150, "whistle1": 1950, "vibHz": 7.2, "vibDepth": 0.028, "whistleGain": 0.72 },
     "46": { "name": "BowlSplit",     "family": "wood",    "bus": "effects", "targetMs": 1450, "kind": "shatter", "material": "wood",  "baseHz": 560,  "pieces": 22, "spanMs": 1200, "noiseHz0": 1350, "noiseHz1": 680, "subHz0": 180, "subHz1": 78, "subGain": 0.15 },
-    "47": { "name": "ErrorKnock",    "family": "wood",    "bus": "ui",      "targetMs": 200,  "kind": "modal",   "material": "wood",  "baseHz": 440,  "decayScale": 1.1,  "clickHz": 900,  "clickGain": 0.25 }
+    "47": { "name": "ErrorKnock",    "family": "wood",    "bus": "ui",      "targetMs": 200,  "kind": "modal",   "material": "wood",  "baseHz": 440,  "decayScale": 1.1,  "clickHz": 900,  "clickGain": 0.25 },
+    "48": { "name": "SwingLight",    "family": "air",     "bus": "effects", "targetMs": 85,   "kind": "air",     "freq0": 2350, "freq1": 1150, "q": 1.8 },
+    "49": { "name": "SwingHeavy",    "family": "air",     "bus": "effects", "targetMs": 170,  "kind": "air",     "freq0": 1850, "freq1": 840,  "q": 1.7, "whistle0": 1100, "whistle1": 520, "vibHz": 0, "vibDepth": 0, "whistleGain": 0.28 },
+    "50": { "name": "ChargePulse",   "family": "fm",      "bus": "effects", "targetMs": 140,  "kind": "fm",      "f0": 310,  "f1": 490,  "modRatio": 1.5, "modIdx": 1.3, "airHz": 1800, "airGain": 0.18 }
   },
   "auctioneer": {
     "0":  { "name": "LotNumber",     "family": "auctioneer", "targetMs": 720,  "gavelCount": 1, "gavelGapMs": 140, "notes": [
