@@ -99,6 +99,7 @@ export interface RenderFrameInput {
   readonly isLobby: boolean;
   readonly readyPlatterActive: boolean;
   readonly finishBySlot?: ReadonlyMap<number, GlazeFinish>;
+  readonly localSlot?: number;
 }
 
 function disposeObjectTree(root: THREE.Object3D): void {
@@ -115,7 +116,49 @@ function disposeObjectTree(root: THREE.Object3D): void {
   });
 }
 
-function createExtrudedChunkGeometry(poly: readonly (readonly [number, number])[]): THREE.ExtrudeGeometry {
+function buildChunkPalette(arenaId: ArenaId, isHighTeaRose: boolean): THREE.Vector3[] {
+  const pal = getGameData().palette;
+  const world = pal.world;
+  const neutrals = pal.neutrals;
+  const accents = pal.accents;
+
+  let slot0: THREE.Vector3;
+  let slot1: THREE.Vector3;
+  let slot2: THREE.Vector3;
+
+  switch (arenaId) {
+    case ArenaId.Willow:
+      slot0 = hexToLinearVec3(world['willow_glaze']!).lerp(hexToLinearVec3(world['willow_wash']!), 0.14);
+      slot1 = hexToLinearVec3(world['willow_line']!);
+      slot2 = hexToLinearVec3('#C69D7E');
+      break;
+    case ArenaId.HighTea:
+      slot0 = isHighTeaRose ? hexToLinearVec3(world['tea_rose']!) : hexToLinearVec3(world['tea_cream']!);
+      slot1 = hexToLinearVec3(accents['gilt']!);
+      slot2 = hexToLinearVec3(neutrals['bisque']!);
+      break;
+    case ArenaId.MendedBowl:
+      slot0 = hexToLinearVec3(world['bowl_tenmoku']!);
+      slot1 = hexToLinearVec3(accents['gilt']!);
+      slot2 = hexToLinearVec3('#2E2622');
+      break;
+    case ArenaId.Saucer:
+      slot0 = hexToLinearVec3(neutrals['bone']!);
+      slot1 = hexToLinearVec3(accents['gilt']!);
+      slot2 = hexToLinearVec3(neutrals['bisque']!);
+      break;
+    default:
+      assertNever(arenaId, 'buildChunkPalette');
+  }
+
+  return Array.from({ length: 16 }, (_, idx) => {
+    if (idx === 1) return slot1.clone();
+    if (idx === 2) return slot2.clone();
+    return slot0.clone();
+  });
+}
+
+function createExtrudedChunkGeometry(poly: readonly (readonly [number, number])[], arenaId: ArenaId): THREE.ExtrudeGeometry {
   const [cx, cy] = polygonCentroid(poly);
   const shape = new THREE.Shape();
   const first = poly[0]!;
@@ -125,8 +168,58 @@ function createExtrudedChunkGeometry(poly: readonly (readonly [number, number])[
     shape.lineTo(pt[0] - cx, pt[1] - cy);
   }
   shape.closePath();
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: 2.2, bevelEnabled: false });
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 2.2,
+    bevelEnabled: true,
+    bevelThickness: 0.06,
+    bevelSize: 0.05,
+    bevelSegments: 1,
+  });
   geo.translate(0, 0, -1.1);
+  if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  const norm = geo.getAttribute('normal') as THREE.BufferAttribute;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  }
+
+  const stripeMetal = arenaId === ArenaId.Willow ? 0.0 : 0.75;
+  const colors = new Float32Array(pos.count * 4);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const ny = norm.getY(i);
+    const ao = 0.58 + 0.42 * Math.max(0, Math.min(1, 0.5 + 0.5 * ny));
+
+    let slot = 0;
+    let gloss = 1.0;
+    let metal = 0.0;
+
+    if (y >= maxY - 0.24 || ny > 0.55) {
+      slot = 0;
+      gloss = 1.0;
+      metal = 0.0;
+    } else if (y >= maxY - 0.50) {
+      slot = 1;
+      gloss = 0.95;
+      metal = stripeMetal;
+    } else {
+      slot = 2;
+      gloss = 0.25;
+      metal = 0.0;
+    }
+
+    const i4 = i * 4;
+    colors[i4] = slot / 15.0;
+    colors[i4 + 1] = gloss;
+    colors[i4 + 2] = ao;
+    colors[i4 + 3] = metal;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 4));
   return geo;
 }
 
@@ -172,15 +265,18 @@ export class GreyboxRenderer {
   private lobbyPlatter: THREE.Mesh | null = null;
   private lobbyPlatterMat: GlazeMaterial | null = null;
   private lobbyRimMat: GlazeMaterial | null = null;
+  private localMarkerMesh: THREE.Mesh | null = null;
+  private localMarkerMat: GlazeMaterial | null = null;
+  private localMarkerSlot = -1;
 
   private readonly dummy = new THREE.Object3D();
   private readonly activeSlotsSet = new Set<number>();
   private readonly shadowsBuffer: { x: number; y: number; scale: number }[] = [];
   private readonly lobbyBoneVec = new THREE.Vector3();
   private readonly lobbyOkVec = new THREE.Vector3();
-  private readonly chunkBaseColorByMesh = new WeakMap<THREE.Mesh, THREE.Vector3>();
-  private readonly crazedChunkTint = new THREE.Vector3(0.84, 0.80, 0.76);
-  private readonly looseChunkTint = new THREE.Vector3(0.72, 0.67, 0.63);
+  private readonly crazedGlazeTint = new THREE.Vector3(0.84, 0.80, 0.76);
+  private readonly looseGlazeTint = new THREE.Vector3(0.72, 0.67, 0.63);
+  private readonly whiteGlazeTint = new THREE.Vector3(1.0, 1.0, 1.0);
   private loadedArenaId: ArenaId | null = null;
   private tier: QualityTier;
   private renderScale = 1.0;
@@ -313,7 +409,23 @@ export class GreyboxRenderer {
     platterGroup.visible = false;
     this.lobbyPlatter = platterGroup;
 
-    this.worldGroup.add(this.rubbleMesh, this.projectileMesh, this.hazardMesh, this.lobbyPlatter);
+    // Lightweight overhead local-player ceramic chevron/diamond marker (1 draw call, ~8 tris)
+    const markerGeo = new THREE.ConeGeometry(0.24, 0.42, 4);
+    markerGeo.rotateX(Math.PI);
+    this.localMarkerMat = createGlazeMaterial({
+      matcap,
+      usePaletteAttr: false,
+      baseColor: hexToLinearVec3(pal.players[0]!.hex),
+      gloss: 1.0,
+      sheen: 0.5,
+      speckle: 0.0,
+      gilt: 0.2,
+    });
+    this.localMarkerMesh = new THREE.Mesh(markerGeo, this.localMarkerMat);
+    this.localMarkerMesh.visible = false;
+    this.localMarkerMesh.frustumCulled = false;
+
+    this.worldGroup.add(this.rubbleMesh, this.projectileMesh, this.hazardMesh, this.lobbyPlatter, this.localMarkerMesh);
     this.applyTierBackdropAndMaterials();
   }
 
@@ -337,8 +449,7 @@ export class GreyboxRenderer {
       if (isLow) {
         mat.uniforms.uCrack.value = 0;
       } else {
-        const base = this.chunkBaseColorByMesh.get(mesh);
-        if (base) mat.uniforms.uBaseColor.value.copy(base);
+        mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
       }
     }
     for (const mesh of this.platformMeshes) {
@@ -391,22 +502,6 @@ export class GreyboxRenderer {
     }
   }
 
-  private chunkGlazeColor(arenaId: ArenaId): THREE.Vector3 {
-    const world = getGameData().palette.world;
-    switch (arenaId) {
-      case ArenaId.Willow:
-        return hexToLinearVec3(world['willow_glaze']!).lerp(hexToLinearVec3(world['willow_wash']!), 0.14);
-      case ArenaId.HighTea:
-        return hexToLinearVec3(world['tea_cream']!);
-      case ArenaId.MendedBowl:
-        return hexToLinearVec3(world['bowl_tenmoku']!);
-      case ArenaId.Saucer:
-        return hexToLinearVec3(getGameData().palette.neutrals['bone']!);
-      default:
-        assertNever(arenaId, 'chunkGlazeColor');
-    }
-  }
-
   private platformGlazeColor(arenaId: ArenaId): THREE.Vector3 {
     const pal = getGameData().palette;
     switch (arenaId) {
@@ -431,26 +526,22 @@ export class GreyboxRenderer {
     this.clearArenaMeshes();
     const spec = getArenaSpec(arenaId);
     const matcap = this.assets.matcap;
-    const baseChunkCol = this.chunkGlazeColor(arenaId);
     const platCol = this.platformGlazeColor(arenaId);
     const pal = getGameData().palette;
 
     for (let i = 0; i < spec.chunks.length; i++) {
       const ch = spec.chunks[i]!;
-      const geo = createExtrudedChunkGeometry(ch.poly);
+      const geo = createExtrudedChunkGeometry(ch.poly, arenaId);
       const isHighTeaRose = arenaId === ArenaId.HighTea && ch.id.startsWith('T2');
-      const chunkTint = isHighTeaRose ? hexToLinearVec3(pal.world['tea_rose']!) : baseChunkCol.clone();
       const mat = createGlazeMaterial({
         matcap,
-        usePaletteAttr: false,
-        baseColor: chunkTint,
-        gloss: arenaId === ArenaId.MendedBowl ? 0.45 : 0.95,
+        usePaletteAttr: true,
+        palette: buildChunkPalette(arenaId, isHighTeaRose),
         sheen: 0.4,
         speckle: this.tier === QualityTier.Low ? 0 : 0.7,
         kintsugi: arenaId === ArenaId.MendedBowl ? 1.0 : 0.0,
       });
       const mesh = new THREE.Mesh(geo, mat);
-      this.chunkBaseColorByMesh.set(mesh, chunkTint.clone());
       this.worldGroup.add(mesh);
       this.chunkMeshes.push(mesh);
     }
@@ -651,23 +742,23 @@ export class GreyboxRenderer {
       const mesh = this.chunkMeshes[i];
       if (!mesh) continue;
       mesh.visible = ch.state !== ChunkState.Gone;
-      mesh.position.set(ch.x, ch.y, 0);
+      const trembleX = ch.state === ChunkState.Crazed ? Math.sin(this.simTimeSec * 42 + i * 2.1) * 0.032 : 0;
+      mesh.position.set(ch.x + trembleX, ch.y, 0);
       mesh.rotation.z = ch.angle;
 
       const mat = mesh.material as GlazeMaterial;
       if (isLow) {
         mat.uniforms.uCrack.value = 0;
         mat.uniforms.uSpeckle.value = 0;
-        const baseCol = this.chunkBaseColorByMesh.get(mesh);
-        if (baseCol) {
-          mat.uniforms.uBaseColor.value.copy(baseCol);
-          if (ch.state === ChunkState.Crazed) {
-            mat.uniforms.uBaseColor.value.multiply(this.crazedChunkTint);
-          } else if (ch.state === ChunkState.Loose || ch.state === ChunkState.Falling) {
-            mat.uniforms.uBaseColor.value.multiply(this.looseChunkTint);
-          }
+        if (ch.state === ChunkState.Crazed) {
+          mat.uniforms.uGlazeTint.value.copy(this.crazedGlazeTint);
+        } else if (ch.state === ChunkState.Loose || ch.state === ChunkState.Falling) {
+          mat.uniforms.uGlazeTint.value.copy(this.looseGlazeTint);
+        } else {
+          mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
         }
       } else {
+        mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
         const hpRatio = ch.maxHp > 0 ? Math.max(0, Math.min(1, ch.hp / ch.maxHp)) : 1;
         const stateCrack =
           ch.state === ChunkState.Crazed
@@ -727,6 +818,8 @@ export class GreyboxRenderer {
     }
 
     this.shadowsBuffer.length = 0;
+    let markerFighter: FighterRuntime | null = null;
+    const localSlot = input.localSlot;
     for (let i = 0; i < input.fighters.length; i++) {
       const f = input.fighters[i]!;
       const finish =
@@ -734,6 +827,16 @@ export class GreyboxRenderer {
       const rig = this.ensureFighterRig(f, finish);
       const isTeaspoon = f.state === FighterState.Teaspoon;
       const isEliminated = f.state === FighterState.Eliminated;
+
+      if (
+        localSlot !== undefined &&
+        f.slot === localSlot &&
+        !isEliminated &&
+        !isTeaspoon &&
+        f.stocks > 0
+      ) {
+        markerFighter = f;
+      }
 
       rig.group.visible = !isEliminated;
       rig.inst.group.visible = !isTeaspoon;
@@ -786,6 +889,23 @@ export class GreyboxRenderer {
       }
     }
     this.vfx.updateBlobShadows(this.shadowsBuffer);
+
+    if (this.localMarkerMesh && this.localMarkerMat) {
+      if (markerFighter !== null) {
+        if (this.localMarkerSlot !== markerFighter.slot) {
+          this.localMarkerSlot = markerFighter.slot;
+          const players = getGameData().palette.players;
+          const liveryHex = players[markerFighter.slot % players.length]!.hex;
+          this.localMarkerMat.uniforms.uBaseColor.value.copy(hexToLinearVec3(liveryHex));
+        }
+        const bob = Math.sin(this.simTimeSec * 5.5) * 0.1;
+        this.localMarkerMesh.visible = true;
+        this.localMarkerMesh.position.set(markerFighter.x, markerFighter.y + 2.35 + bob, 0.35);
+        this.localMarkerMesh.rotation.y = this.simTimeSec * 1.6;
+      } else {
+        this.localMarkerMesh.visible = false;
+      }
+    }
 
     // Sync ceramic gadgets & parcels pool
     this.releaseAllGadgetProps();
@@ -862,8 +982,7 @@ export class GreyboxRenderer {
       const spec = willow.chunks[i]!;
       const mesh = this.chunkMeshes[i]!;
       const mat = mesh.material as GlazeMaterial;
-      const baseCol = this.chunkBaseColorByMesh.get(mesh);
-      if (baseCol) mat.uniforms.uBaseColor.value.copy(baseCol);
+      mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
       mat.uniforms.uSpeckle.value = 0.7;
       const [cx, cy] = polygonCentroid(spec.poly);
       if (spec.id === 'W1') {
@@ -930,6 +1049,7 @@ export class GreyboxRenderer {
     this.releaseAllGadgetProps();
     for (const rig of this.fighterRigs.values()) rig.group.visible = false;
     if (this.lobbyPlatter) this.lobbyPlatter.visible = false;
+    if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
     if (this.rubbleMesh) this.rubbleMesh.count = 0;
     if (this.projectileMesh) this.projectileMesh.count = 0;
     if (this.hazardMesh) this.hazardMesh.count = 0;
@@ -1018,6 +1138,7 @@ export class GreyboxRenderer {
 
       this.worldGroup.visible = false;
       this.showcaseGroup.visible = true;
+      if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
 
       // Bone saucer plinth with gilt rim
       const plinth = new THREE.Mesh(
@@ -1078,13 +1199,13 @@ export class GreyboxRenderer {
         mesh.position.set(cx, cy, 0);
         mesh.rotation.z = 0;
         const mat = mesh.material as GlazeMaterial;
-        const baseCol = this.chunkBaseColorByMesh.get(mesh);
-        if (baseCol) mat.uniforms.uBaseColor.value.copy(baseCol);
+        mat.uniforms.uGlazeTint.value.copy(this.whiteGlazeTint);
         mat.uniforms.uSpeckle.value = 0.7;
         mat.uniforms.uCrack.value = arenaId === ArenaId.MendedBowl ? 0.85 : 0.0;
         mat.uniforms.uKintsugi.value = arenaId === ArenaId.MendedBowl ? 1.0 : 0.0;
       }
       if (this.lobbyPlatter) this.lobbyPlatter.visible = arenaId === ArenaId.Saucer;
+      if (this.localMarkerMesh) this.localMarkerMesh.visible = false;
       if (this.rubbleMesh) this.rubbleMesh.count = 0;
       if (this.projectileMesh) this.projectileMesh.count = 0;
       if (this.hazardMesh) this.hazardMesh.count = 0;
@@ -1130,6 +1251,7 @@ export class GreyboxRenderer {
     if (this.projectileMesh) disposeObjectTree(this.projectileMesh);
     if (this.hazardMesh) disposeObjectTree(this.hazardMesh);
     if (this.lobbyPlatter) disposeObjectTree(this.lobbyPlatter);
+    if (this.localMarkerMesh) disposeObjectTree(this.localMarkerMesh);
     this.skyTexture?.dispose();
     if (this.assets) {
       this.assets.matcap.dispose();

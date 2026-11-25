@@ -39,6 +39,8 @@ function toAudioBuffer(ctx: AudioContext, samples: Float32Array, sr: number): Au
   return buf;
 }
 
+const UNLOCK_EVENTS = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'] as const;
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -59,6 +61,8 @@ export class AudioEngine {
   private readonly busVolumes: Record<AudioBusName, number> = { effects: 1.0, music: 0.75, auctioneer: 0.9, ui: 0.85 };
   private muted = false;
   private unlocked = false;
+  private onUnlockChange: ((unlocked: boolean) => void) | null = null;
+  private pendingSound: { readonly id: SoundId; readonly opts: PlaySoundOptions } | null = null;
   private activeVoices = 0;
   private readonly perSoundActive = new Map<SoundId, number>();
   private detuneStep = 0;
@@ -69,14 +73,24 @@ export class AudioEngine {
 
   public attachUnlockListeners(): void {
     if (typeof window === 'undefined') return;
-    window.addEventListener('pointerdown', this.onGesture, { passive: true });
-    window.addEventListener('keydown', this.onGesture, { passive: true });
+    for (const ev of UNLOCK_EVENTS) {
+      window.addEventListener(ev, this.onGesture, { capture: true, passive: true });
+    }
   }
 
   public detachUnlockListeners(): void {
     if (typeof window === 'undefined') return;
-    window.removeEventListener('pointerdown', this.onGesture);
-    window.removeEventListener('keydown', this.onGesture);
+    for (const ev of UNLOCK_EVENTS) {
+      window.removeEventListener(ev, this.onGesture, { capture: true });
+    }
+  }
+
+  public setOnUnlockChange(cb: ((unlocked: boolean) => void) | null): void {
+    this.onUnlockChange = cb;
+  }
+
+  public getAudioContextState(): AudioContextState | 'uninitialized' {
+    return this.ctx ? this.ctx.state : 'uninitialized';
   }
 
   public unlock(): void {
@@ -120,15 +134,47 @@ export class AudioEngine {
       this.uiGain.gain.value = this.busVolumes.ui;
       this.uiGain.connect(this.masterGain);
     }
-    if (this.ctx.state === 'suspended') {
-      void this.ctx.resume();
+
+    if (!this.unlocked) {
+      const silent = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+      const src = this.ctx.createBufferSource();
+      src.buffer = silent;
+      src.connect(this.ctx.destination);
+      src.start(0);
     }
-    this.unlocked = this.ctx.state === 'running';
-    if (this.unlocked) {
-      this.detachUnlockListeners();
-      if (this.musicPhase !== MusicPhase.Silent && this.activeMusicSources.length === 0 && this.clockTimer === null) {
+
+    if (this.ctx.state === 'suspended') {
+      void this.ctx.resume().then(() => this.onContextRunning(), () => undefined);
+    } else if (this.ctx.state === 'running') {
+      this.onContextRunning();
+    }
+  }
+
+  private onContextRunning(): void {
+    if (this.ctx === null) return;
+    const wasUnlocked = this.unlocked;
+    this.unlocked = true;
+    this.detachUnlockListeners();
+    if (!wasUnlocked) {
+      this.onUnlockChange?.(true);
+    }
+
+    const pending = this.pendingSound;
+    this.pendingSound = null;
+    if (pending !== null && this.ctx.state !== 'suspended') {
+      this.play(pending.id, pending.opts);
+    }
+
+    if (this.musicPhase !== MusicPhase.Silent && this.activeMusicSources.length === 0 && this.clockTimer === null) {
+      if (!wasUnlocked || this.musicPhase !== MusicPhase.Results) {
         this.applyMusicPhase(this.musicPhase);
       }
+    }
+
+    if (!wasUnlocked && this.musicStems === null) {
+      setTimeout(() => {
+        if (this.ctx) this.getOrSynthMusicStems(this.ctx);
+      }, 120);
     }
   }
 
@@ -221,7 +267,12 @@ export class AudioEngine {
   }
 
   public play(id: SoundId, opts: PlaySoundOptions = {}): void {
-    if (this.muted || this.ctx === null || this.ctx.state === 'suspended') return;
+    if (this.muted || this.ctx === null) return;
+    if (this.ctx.state === 'suspended') {
+      this.pendingSound = { id, opts };
+      void this.ctx.resume().then(() => this.onContextRunning(), () => undefined);
+      return;
+    }
     if (this.activeVoices >= MAX_VOICES) return;
     const same = this.perSoundActive.get(id) ?? 0;
     if (same >= MAX_SAME_SOUND) return;

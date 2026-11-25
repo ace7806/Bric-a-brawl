@@ -163,7 +163,7 @@ export class CameraController {
 
     // Distance derived from vertical FOV & desired visible horizontal width
     const vFovRad = cam.fovDeg * DEG2RAD;
-    const hHalfTan = Math.tan(vFovRad * 0.5) * Math.max(0.5, aspect);
+    const hHalfTan = Math.tan(vFovRad * 0.5) * Math.max(0.35, aspect);
     const dist = (width * 0.5) / hHalfTan;
     const pitchRad = cam.pitchDeg * DEG2RAD;
 
@@ -176,13 +176,14 @@ export class CameraController {
 
     const camYOffset = -Math.sin(pitchRad) * dist;
     const camZOffset = Math.cos(pitchRad) * dist;
+    const portraitBiasY = aspect < 1.0 ? -1.35 * (1 - aspect) * (width / 20) : 0;
     camera.fov = cam.fovDeg;
     camera.position.set(
       x - Math.sin(yawRad) * dist + sx,
       y + camYOffset + sy,
       camZOffset,
     );
-    camera.lookAt(x + sx * 0.35, y + sy * 0.35, 0);
+    camera.lookAt(x + sx * 0.35, y + portraitBiasY + sy * 0.35, 0);
     camera.rotation.z += rollRad;
     camera.updateProjectionMatrix();
 

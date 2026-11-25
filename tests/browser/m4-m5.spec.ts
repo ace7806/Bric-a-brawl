@@ -414,6 +414,79 @@ async function runM5UiClipboardAndMismatch(browser: Browser, baseUrl: string) {
   }
 }
 
+async function runMobileTouchAndAudioCheck(browser: Browser, baseUrl: string) {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+  });
+  try {
+    const page = await ctx.newPage();
+    attachPageErrors(page, 'mobile-touch', pageErrors, consoleErrors);
+
+    await page.goto(`${baseUrl}/index.html`, { waitUntil: 'domcontentloaded' });
+    await waitForDebugReady(page, 20_000);
+    await waitForScreen(page, ScreenId.Title);
+
+    // Open How to Play guide and verify it renders cleanly on mobile
+    await page.tap('[data-action="open-guide"]');
+    await page.waitForSelector('[data-modal="how-to-play"]', { state: 'visible', timeout: 5_000 });
+    await page.tap('[data-modal="how-to-play"] button');
+    await page.waitForSelector('[data-modal="how-to-play"]', { state: 'hidden', timeout: 5_000 });
+
+    // Audio must unlock cleanly to 'running' after first tap
+    await page.waitForFunction(() => window.__bbDebug?.audioState === 'running', undefined, { timeout: 5_000 });
+    const audioState = await page.evaluate(() => window.__bbDebug!.audioState);
+    assert(audioState === 'running', `Expected Web Audio running after tap, got ${audioState}`);
+
+    // Tap Play solo -> Lobby with virtual touch controls visible
+    await page.tap('[data-action="solo-practice"]');
+    await waitForScreen(page, ScreenId.Lobby, 15_000);
+    await page.waitForSelector('[data-touch-controls="true"]', { state: 'visible', timeout: 5_000 });
+    await flushTwoRafs(page);
+    await page.screenshot({ path: resolve(M5_DIR, 'screen-mobile-portrait.png') });
+
+    // Start round via one-tap Start round button and verify touch attack button drives input mask
+    await page.tap('[data-action="start-match"]');
+    await waitForScreen(page, ScreenId.Hud, 15_000);
+    await page.waitForSelector('[data-touch-controls="true"]', { state: 'visible', timeout: 5_000 });
+
+    const hitBtn = page.locator('.tb-hit');
+    const box = await hitBtn.boundingBox();
+    assert(box !== null, 'Mobile Hit button boundingBox missing');
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
+    await page.mouse.down();
+    await flushTwoRafs(page);
+    const activeMask = await page.evaluate(() => window.__bbDebug!.lastInputMask);
+    await page.mouse.up();
+    assert(activeMask !== 0, `Expected non-zero input mask while holding mobile Hit button, got ${activeMask}`);
+
+    // Switch to mobile landscape (844x390) and capture live match HUD + touch controls
+    await page.setViewportSize({ width: 844, height: 390 });
+    await flushTwoRafs(page);
+    await page.screenshot({ path: resolve(M5_DIR, 'screen-mobile-landscape.png') });
+
+    assert(pageErrors.length === 0, `Mobile pageErrors: ${pageErrors.join(' | ')}`);
+    assert(consoleErrors.length === 0, `Mobile consoleErrors: ${consoleErrors.join(' | ')}`);
+
+    return {
+      passed: true,
+      audioState,
+      touchMaskActive: activeMask,
+      screenshots: [
+        'evidence/M5/screen-mobile-portrait.png',
+        'evidence/M5/screen-mobile-landscape.png',
+      ],
+      pageErrors,
+      consoleErrors,
+    };
+  } finally {
+    await ctx.close();
+  }
+}
+
 async function main(): Promise<void> {
   mkdirSync(M4_DIR, { recursive: true });
   mkdirSync(M5_DIR, { recursive: true });
@@ -428,6 +501,7 @@ async function main(): Promise<void> {
     const m43 = await runM43HighTierBudget(browser, server.baseUrl);
     const m46 = await runM46AndShowcases(browser, server.baseUrl);
     const m5 = await runM5UiClipboardAndMismatch(browser, server.baseUrl);
+    const mobile = await runMobileTouchAndAudioCheck(browser, server.baseUrl);
 
     const m4Report = {
       generatedAtUtc: new Date().toISOString(),
@@ -439,6 +513,7 @@ async function main(): Promise<void> {
     const m5Report = {
       generatedAtUtc: new Date().toISOString(),
       ...m5,
+      mobileTouchAndAudio: mobile,
       allPassed: true,
     };
 
@@ -447,7 +522,7 @@ async function main(): Promise<void> {
     writeFileSync(m4Path, `${JSON.stringify(m4Report, null, 2)}\n`, 'utf8');
     writeFileSync(m5Path, `${JSON.stringify(m5Report, null, 2)}\n`, 'utf8');
     console.log(
-      `[m4-m5.spec] PASS -> ${m4Path} & ${m5Path} (drawCallsMax=${m43.drawCallsMax}, trisMax=${m43.trianglesMax}, png=${m5.m5_4_clipboard.pngWidth}x${m5.m5_4_clipboard.pngHeight})`,
+      `[m4-m5.spec] PASS -> ${m4Path} & ${m5Path} (drawCallsMax=${m43.drawCallsMax}, trisMax=${m43.trianglesMax}, png=${m5.m5_4_clipboard.pngWidth}x${m5.m5_4_clipboard.pngHeight}, mobileAudio=${mobile.audioState})`,
     );
   } finally {
     await browser.close();

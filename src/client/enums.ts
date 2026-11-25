@@ -120,3 +120,9 @@ export enum KeyAction {
   Use = 10,
   Taunt = 11,
 }
+
+export enum TouchControlsMode {
+  Auto = 0,
+  Always = 1,
+  Off = 2,
+}

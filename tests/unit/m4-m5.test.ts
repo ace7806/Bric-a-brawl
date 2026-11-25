@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { GlazeFinish, KeyAction } from '@client/enums';
 import { applyGlazeFinish, buildFighterPalette, createGlazeMaterial, hexToLinearVec3 } from '@client/glaze-material';
+import { formatKeyCode, InputCollector } from '@client/input';
 import { applyFighterPose, createFighterAnimRuntime, type BoneSlot, type FighterBoneRig } from '@client/poses';
 import {
   ALL_APPRAISAL_IDS, APPRAISAL_SPECS, AppraisalId, DEFAULT_LOT_NAMES, PROFILE_STORAGE_KEY,
@@ -10,7 +11,8 @@ import {
   savePlayerProfile, type RoundTelemetryForAppraisal,
 } from '@client/progression';
 import type { SnapshotFighter } from '@net/codec';
-import { ALL_FIGHTER_IDS, FighterFlag, FighterId, FighterState, GadgetId, KoCause, MoveId, NestaSize } from '@sim/enums';
+import { ALL_FIGHTER_IDS, FighterFlag, FighterId, FighterState, GadgetId, InputBit, InputDir, KoCause, MoveId, NestaSize } from '@sim/enums';
+import { decodeInputDir } from '@sim/input';
 
 function makeStorageStub(): Storage {
   const map = new Map<string, string>();
@@ -206,5 +208,39 @@ describe('M4 procedural pose tables & 6 life layers (src/client/poses.ts)', () =
         }
       }
     }
+  });
+});
+
+describe('Mobile virtual touch controls & human key formatting (src/client/input.ts)', () => {
+  it('formats KeyboardEvent.code strings into clean human key labels', () => {
+    expect(formatKeyCode('KeyJ')).toBe('J');
+    expect(formatKeyCode('Digit4')).toBe('4');
+    expect(formatKeyCode('ShiftLeft')).toBe('Shift');
+    expect(formatKeyCode('ArrowLeft')).toBe('←');
+    expect(formatKeyCode('ArrowRight')).toBe('→');
+    expect(formatKeyCode('Space')).toBe('Space');
+    expect(formatKeyCode('Escape')).toBe('Esc');
+  });
+
+  it('merges virtual touch stick direction, tilt, action bits, and clears cleanly', () => {
+    const collector = new InputCollector(makeStorageStub());
+    expect(collector.pollMask()).toBe(0);
+
+    collector.setTouchStick(InputDir.UpRight, true);
+    collector.setTouchBit(InputBit.Attack, true);
+    collector.setTouchBit(InputBit.Jump, true);
+    const mask = collector.pollMask();
+    expect(decodeInputDir(mask)).toBe(InputDir.UpRight);
+    expect((mask & InputBit.Tilt) !== 0).toBe(true);
+    expect((mask & InputBit.Attack) !== 0).toBe(true);
+    expect((mask & InputBit.Jump) !== 0).toBe(true);
+
+    collector.setTouchBit(InputBit.Attack, false);
+    const mask2 = collector.pollMask();
+    expect((mask2 & InputBit.Attack) !== 0).toBe(false);
+    expect((mask2 & InputBit.Jump) !== 0).toBe(true);
+
+    collector.clearTouch();
+    expect(collector.pollMask()).toBe(0);
   });
 });

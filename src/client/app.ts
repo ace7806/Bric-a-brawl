@@ -12,7 +12,7 @@ import { assert, assertNever, InvariantError, requireKey } from '@sim/assert';
 import { getArenaSpec, getFighterSpec, getGameData, parseArenaId } from '@sim/data';
 import {
   ALL_ARENA_IDS, ArenaId, ChunkState, ErrorCode, FighterFlag, FighterId, FighterState,
-  GadgetId, KoCause, MatchMode, SimEventKind, TeamId, TimelineAction,
+  GadgetId, KoCause, MatchMode, MoveId, SimEventKind, TeamId, TimelineAction,
 } from '@sim/enums';
 import { createFighter } from '@sim/fighter';
 import { polygonCentroid } from '@sim/geometry';
@@ -24,7 +24,7 @@ import { initPhysics } from '@sim/world';
 import * as THREE from 'three';
 import { type AudioBusName, AudioEngine, fighterPitchScale } from './audio';
 import { CameraController } from './camera';
-import { AuctioneerLineId, GlazeFinish, MusicPhase, QualityTier, ScreenId, SoundId } from './enums';
+import { AuctioneerLineId, GlazeFinish, MusicPhase, QualityTier, ScreenId, SoundId, TouchControlsMode } from './enums';
 import { ALL_KEY_ACTIONS, InputCollector, KeyPreset } from './input';
 import { canvasToPngBlob, renderResultsPhotoCanvas, renderSessionCardCanvas } from './photo';
 import {
@@ -70,6 +70,8 @@ export interface DebugApi {
   readonly impactCountInWindow: number;
   readonly qualityTier: QualityTier;
   readonly reduceFlashes: boolean;
+  readonly audioState: AudioContextState | 'uninitialized';
+  readonly lastInputMask: number;
   resetSnapshotGap(): void;
   setReduceFlashes(reduce: boolean): void;
   startRoundNow(): void;
@@ -183,6 +185,7 @@ export class BricABrawlApp {
   private localRoster: RoomRosterData;
   private botKinds = new Map<number, BotKind>();
   private keyPreset = KeyPreset.KeyboardA;
+  private touchControlsMode = TouchControlsMode.Auto;
   private reduceFlashes: boolean;
   private colorBlindPatterns: boolean;
   private frameDataEnabled = false;
@@ -195,6 +198,7 @@ export class BricABrawlApp {
   private renderHazards: HazardZoneRuntime[] = [];
   private slotStats = new Map<number, SlotTelemetry>();
   private prevDamageBySlot = new Map<number, number>();
+  private prevMotionBySlot = new Map<number, { state: FighterState; grounded: boolean; vy: number; move: MoveId; stepCd: number }>();
   private prevGiltFullBySlot = new Set<number>();
   private prevRubbleIds = new Set<number>();
   private prevBowlSplit = false;
@@ -230,6 +234,7 @@ export class BricABrawlApp {
   private lastFrameMs = 0;
   private inputAccumMs = 0;
   private clientInputTick = 0;
+  private lastInputMask = 0;
   private workerRunning = false;
   private rafId = 0;
 
@@ -268,6 +273,12 @@ export class BricABrawlApp {
       onOpenRoom: () => { this.audio.play(SoundId.UiPick); void this.openRoom(generateCeramicRoomCode()); },
       onJoinRoom: (code) => { this.audio.play(SoundId.UiPick); void this.joinRoom(code); },
       onSoloPractice: () => { this.audio.play(SoundId.UiPick); void this.startSoloPractice(); },
+      onStartMatch: () => {
+        if (this.isAuthHost() && this.roster().slots.length >= 2) {
+          this.audio.play(SoundId.PlatterAll);
+          this.startRoundNow();
+        }
+      },
       onCopyInvite: () => this.copyInviteLink(),
       onSelectFighter: (fid) => { this.audio.play(SoundId.UiPick); this.selectFighter(fid); },
       onSelectColour: (col) => { this.audio.play(SoundId.UiPick); this.selectColour(col); },
@@ -286,6 +297,7 @@ export class BricABrawlApp {
       onCaptureCanvasPhoto: () => this.capturePhoto(),
       onCaptureSessionCard: () => this.captureSessionCard(),
       onChangeQualityTier: (tier) => { this.quality.setUserMaxTier(tier, true); this.renderer.setQuality(tier, this.quality.getRenderScale()); },
+      onChangeTouchControlsMode: (mode) => { this.touchControlsMode = mode; },
       onChangeShakeScale: (s) => { this.camera.setShakeScale(s); this.updateProfile({ cameraShake: s }); },
       onChangeReduceFlashes: (r) => { this.reduceFlashes = r; this.renderer.vfx.setReduceFlashes(r); this.updateProfile({ reduceFlashes: r }); },
       onChangeVolume: (v) => { this.audio.setVolume(v); this.updateProfile({ volumeMaster: v }); },
@@ -295,6 +307,9 @@ export class BricABrawlApp {
       onChangeKeyPreset: (p) => { this.keyPreset = p; this.input.setPreset(p); this.syncKeyBindingsProfile(); },
       onRebindKey: (action, code) => { this.input.rebind(action, code); this.syncKeyBindingsProfile(); },
       onBuildPerfReport: () => this.buildPerfReport(),
+      onTouchStick: (dir, isTilt) => this.input.setTouchStick(dir, isTilt),
+      onTouchBit: (bit, active) => this.input.setTouchBit(bit, active),
+      onTouchClear: () => this.input.clearTouch(),
     });
 
     this.worker = new Worker(new URL('../host/worker.ts', import.meta.url), { type: 'module' });
@@ -672,7 +687,12 @@ export class BricABrawlApp {
     const nowMs = performance.now();
     const pal = getGameData().palette;
     const lSlot = this.localSlot();
-    const isRoundScreen = this.ui.getScreen() === ScreenId.Hud;
+    const screen = this.ui.getScreen();
+    const isTitleScreen = screen === ScreenId.Title;
+    const isRoundScreen = screen === ScreenId.Hud;
+    const playFx = (id: SoundId, opts?: { pan?: number; pitchScale?: number; gainScale?: number }) => {
+      if (!isTitleScreen) this.audio.play(id, opts);
+    };
     for (const ev of events) {
       const f = this.renderFighters.find((x) => x.slot === ev.a);
       const fx = f ? f.x : 0;
@@ -691,35 +711,42 @@ export class BricABrawlApp {
             this.roundHadHit = true;
             if (!this.prevLastCall && !this.prevSuddenDeath) this.audio.setMusicPhase(MusicPhase.RoundAB);
           }
-          this.audio.play(dmg >= 12 ? SoundId.HitHeavy : dmg >= 6 ? SoundId.HitMid : SoundId.HitLight, { pan, pitchScale });
+          playFx(dmg >= 12 ? SoundId.HitHeavy : dmg >= 6 ? SoundId.HitMid : SoundId.HitLight, { pan, pitchScale });
           this.renderer.vfx.spawnChips(fx, fy + 0.7, dmg >= 12 ? 10 : 5, col, dmg >= 12 ? 12 : 8);
-          this.camera.addTrauma(dmg >= 12 ? 0.32 : 0.14);
-          if (dmg >= 15) this.renderer.vfx.triggerImpactFrame(4, nowMs);
+          this.renderer.vfx.spawnRing(fx, fy + 0.7, dmg >= 12 ? pal.accents['stamp_red']! : col, dmg >= 12 ? 2.1 : 1.25, dmg >= 12 ? 16 : 10);
+          if (!isTitleScreen) {
+            this.camera.addTrauma(dmg >= 12 ? 0.32 : 0.14);
+            if (dmg >= 15) this.renderer.vfx.triggerImpactFrame(4, nowMs);
+          }
           break;
         }
-        case SimEventKind.Block: this.audio.play(SoundId.Guard, { pan }); this.renderer.vfx.spawnDust(fx, fy + 0.5, 3); break;
+        case SimEventKind.Block: playFx(SoundId.Guard, { pan }); this.renderer.vfx.spawnDust(fx, fy + 0.5, 3); break;
         case SimEventKind.Parry: {
           const pst = this.slotStats.get(ev.a);
           if (pst) pst.parriesLanded++;
           if (ev.a === lSlot && this.renderProjectiles.some((p) => p.reflected)) {
             this.roundParriedParriedCork = true;
           }
-          this.audio.play(SoundId.Parry, { pan, pitchScale });
-          this.renderer.vfx.triggerImpactFrame(3, nowMs);
-          this.camera.addTrauma(0.22);
+          playFx(SoundId.Parry, { pan, pitchScale });
+          this.renderer.vfx.spawnRing(fx, fy + 0.8, pal.accents['gilt']!, 2.6, 18);
+          if (!isTitleScreen) {
+            this.renderer.vfx.triggerImpactFrame(3, nowMs);
+            this.camera.addTrauma(0.22);
+          }
           break;
         }
         case SimEventKind.GuardBreak:
-          this.audio.play(SoundId.GuardBreak, { pan, pitchScale });
+          playFx(SoundId.GuardBreak, { pan, pitchScale });
           this.renderer.vfx.spawnChips(fx, fy + 0.7, 12, pal.neutrals['bone']!, 12);
-          this.camera.addTrauma(0.4);
+          this.renderer.vfx.spawnRing(fx, fy + 0.8, pal.accents['stamp_red']!, 2.4, 16);
+          if (!isTitleScreen) this.camera.addTrauma(0.4);
           break;
-        case SimEventKind.Grab: this.audio.play(SoundId.HitLight, { pan, pitchScale }); break;
-        case SimEventKind.Throw: this.audio.play(SoundId.HitMid, { pan, pitchScale }); break;
+        case SimEventKind.Grab: playFx(SoundId.HitLight, { pan, pitchScale }); break;
+        case SimEventKind.Throw: playFx(SoundId.HitMid, { pan, pitchScale }); break;
         case SimEventKind.Launch:
           if (ev.c >= 160) {
-            this.audio.play(SoundId.LaunchWhistle, { pan });
-            this.camera.addTrauma(0.22);
+            playFx(SoundId.LaunchWhistle, { pan });
+            if (!isTitleScreen) this.camera.addTrauma(0.22);
             if (isRoundScreen && nowMs - this.lastGoingMs > 1500) {
               this.lastGoingMs = nowMs;
               this.audio.playAuctioneer(AuctioneerLineId.Going);
@@ -735,11 +762,14 @@ export class BricABrawlApp {
           const ks = this.slotStats.get(ev.b);
           if (ks && ev.b !== ev.a) ks.kos++;
           if (ev.a === lSlot && ev.b === lSlot && ev.c === KoCause.Gadget) this.roundSelfKoCork = true;
-          this.audio.play(SoundId.KoSmash, { pan });
+          playFx(SoundId.KoSmash, { pan });
           if (isRoundScreen) this.audio.playAuctioneer(AuctioneerLineId.Gone);
           this.renderer.vfx.spawnChips(fx, fy, 16, col, 14);
-          this.renderer.vfx.triggerImpactFrame(ev.d === 0 ? 10 : 5, nowMs);
-          this.camera.addTrauma(0.6);
+          this.renderer.vfx.spawnRing(fx, fy, pal.accents['stamp_red']!, 3.4, 20);
+          if (!isTitleScreen) {
+            this.renderer.vfx.triggerImpactFrame(ev.d === 0 ? 10 : 5, nowMs);
+            this.camera.addTrauma(0.6);
+          }
           this.feedLines = [ev.b >= 0 ? `Lot ${ev.b + 1} chipped Lot ${ev.a + 1}` : `Lot ${ev.a + 1} chipped out`, ...this.feedLines].slice(0, 4);
           break;
         }
@@ -920,7 +950,9 @@ export class BricABrawlApp {
     const scriptStart = performance.now();
     const roster = this.roster();
     const screen = this.ui.getScreen();
-    const mask = this.ui.isSettingsOpen() ? 0 : this.input.pollMask();
+    const allowInput = !this.ui.isOverlayOpen() && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
+    const mask = allowInput ? this.input.pollMask() : 0;
+    this.lastInputMask = mask;
 
     this.inputAccumMs += dtMs;
     for (let steps = 0; this.inputAccumMs >= DT * 1000 && steps < 4; steps++) {
@@ -961,16 +993,18 @@ export class BricABrawlApp {
     }
 
     if (this.auctioneerBanner !== null && nowMs >= this.bannerExpiryMs) this.auctioneerBanner = null;
-    const aspect = Math.max(0.5, this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight));
+    const aspect = Math.max(0.35, this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight));
     this.camera.update(this.renderer.camera, this.renderFighters, this.renderIsland.arenaId, dtMs / 1000, aspect);
     const isLobby = roster.phase === RoomPhase.Lobby || roster.phase === RoomPhase.Countdown;
     const finishBySlot = new Map<number, GlazeFinish>();
     const lSlot = this.localSlot();
     if (lSlot >= 0) finishBySlot.set(lSlot, this.equippedFinish);
+    const showSelfMarker = lSlot >= 0 && this.smokeBotsCount === 0 && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
     this.renderer.render({
       fighters: this.renderFighters, island: this.renderIsland, worldGadgets: this.renderGadgets,
       projectiles: this.renderProjectiles, hazards: this.renderHazards,
       isLobby, readyPlatterActive: isLobby && this.platterHoldTicks > 0, finishBySlot,
+      ...(showSelfMarker ? { localSlot: lSlot } : {}),
     }, dtMs / 1000);
 
     if (!this.ready) {
@@ -1026,6 +1060,8 @@ export class BricABrawlApp {
     const pred = this.session && !this.session.isHost ? this.clientPredictor : null;
     const visOff = pred !== null ? pred.getVisualOffset() : { x: 0, y: 0 };
     const giltMax = getGameData().tuning.gilt.max;
+    const allowMotionSfx = this.ui.getScreen() === ScreenId.Lobby || this.ui.getScreen() === ScreenId.Hud;
+    const pal = getGameData().palette;
     for (const sf of sampled.fighters) {
       const t = this.renderFighters.find((f) => f.slot === sf.slot);
       if (!t) continue;
@@ -1055,9 +1091,36 @@ export class BricABrawlApp {
       }
       this.prevDamageBySlot.set(t.slot, t.damage);
 
+      const grounded = (t.flags & FighterFlag.Grounded) !== 0;
+      const prevM = this.prevMotionBySlot.get(t.slot);
+      const pan = Math.max(-0.6, Math.min(0.6, t.x / 12));
+      const pitchScale = fighterPitchScale(t.id, t.nestaSize);
+      let nextStepCd = prevM ? Math.max(0, prevM.stepCd - 1) : 0;
+      if (allowMotionSfx && prevM !== undefined) {
+        if (prevM.grounded && !grounded && t.vy > 2.5 && t.state !== FighterState.Hitstun && t.state !== FighterState.Tumble) {
+          this.audio.play(SoundId.Jump, { pan, pitchScale, gainScale: 0.72 });
+          this.renderer.vfx.spawnDust(t.x, t.y, 3);
+        } else if (!prevM.grounded && !grounded && prevM.vy < 2.0 && t.vy > 6.0 && t.state !== FighterState.Hitstun && t.state !== FighterState.Tumble) {
+          this.audio.play(SoundId.DoubleJump, { pan, pitchScale, gainScale: 0.75 });
+          this.renderer.vfx.spawnRing(t.x, t.y, pal.neutrals['bone']!, 0.95, 10);
+        } else if (!prevM.grounded && grounded && prevM.vy < -3.5) {
+          this.audio.play(SoundId.Land, { pan, pitchScale, gainScale: Math.min(1, Math.abs(prevM.vy) / 14) });
+          this.renderer.vfx.spawnDust(t.x, t.y, 4);
+        } else if (grounded && (t.state === FighterState.Run || t.state === FighterState.Dash) && nextStepCd === 0) {
+          const stepSnd = t.id === FighterId.Grog ? SoundId.StepStone : SoundId.StepChina;
+          this.audio.play(stepSnd, { pan, pitchScale, gainScale: 0.28 });
+          nextStepCd = 15;
+        }
+        if (t.state === FighterState.Attack && t.activeMove !== MoveId.None && (prevM.state !== FighterState.Attack || prevM.move !== t.activeMove)) {
+          const specialSnd = this.specialStartSound(t.id, t.activeMove);
+          if (specialSnd !== null) this.audio.play(specialSnd, { pan, pitchScale, gainScale: 0.85 });
+        }
+      }
+      this.prevMotionBySlot.set(t.slot, { state: t.state, grounded, vy: t.vy, move: t.activeMove, stepCd: nextStepCd });
+
       if (t.gilt >= giltMax && !this.prevGiltFullBySlot.has(t.slot)) {
         this.prevGiltFullBySlot.add(t.slot);
-        this.audio.play(SoundId.GiltFull, { pan: Math.max(-0.6, Math.min(0.6, t.x / 12)) });
+        if (allowMotionSfx) this.audio.play(SoundId.GiltFull, { pan });
       } else if (t.gilt < giltMax) {
         this.prevGiltFullBySlot.delete(t.slot);
       }
@@ -1290,15 +1353,31 @@ export class BricABrawlApp {
     this.ui.setScreen(ScreenId.ConnectionError);
   }
 
+  private specialStartSound(fighterId: FighterId, move: MoveId): SoundId | null {
+    const isSpecial = move === MoveId.Nspec || move === MoveId.Sspec || move === MoveId.Uspec || move === MoveId.Dspec;
+    if (!isSpecial) return null;
+    switch (fighterId) {
+      case FighterId.Earl: return move === MoveId.Uspec ? SoundId.EarlPop : SoundId.EarlPuff;
+      case FighterId.Grog: return move === MoveId.Dspec || move === MoveId.Uspec ? SoundId.GrogStamp : SoundId.GrogSnort;
+      case FighterId.Nesta: return SoundId.NestaPop;
+      case FighterId.Moss: return SoundId.MossCast;
+      default: return assertNever(fighterId, 'specialStartSound');
+    }
+  }
+
   private onGlobalKey(e: KeyboardEvent): void {
+    const target = e.target as HTMLElement | null;
+    if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) return;
     if (e.code === 'Escape') {
       if (this.ui.getScreen() === ScreenId.CharSelect) this.ui.setScreen(ScreenId.Lobby);
+      else if (this.ui.isOverlayOpen() && !this.ui.isSettingsOpen()) this.ui.closeGuide();
       else this.ui.toggleSettings(this.getSettingsState());
     } else if (e.code === 'Tab') {
       e.preventDefault();
       this.frameDataEnabled = !this.frameDataEnabled;
+      this.ui.syncSettings(this.getSettingsState());
       this.syncLobbyUi();
-    } else if (e.code === 'KeyE' && !this.ui.isSettingsOpen()) {
+    } else if (e.code === 'KeyC' && !this.ui.isOverlayOpen()) {
       const s = this.ui.getScreen();
       if (s === ScreenId.Lobby) this.ui.setScreen(ScreenId.CharSelect);
       else if (s === ScreenId.CharSelect) this.ui.setScreen(ScreenId.Lobby);
@@ -1308,6 +1387,8 @@ export class BricABrawlApp {
   private getSettingsState(): SettingsViewState {
     return {
       qualityTier: this.quality.getTier(),
+      touchControlsMode: this.touchControlsMode,
+      frameDataEnabled: this.frameDataEnabled,
       shakeScale: this.camera.getShakeScale(),
       reduceFlashes: this.reduceFlashes,
       volume: this.audio.getVolume(),
@@ -1358,6 +1439,8 @@ export class BricABrawlApp {
       get impactCountInWindow() { return app.renderer.vfx.getImpactCountInLastSecond(performance.now()); },
       get qualityTier() { return app.quality.getTier(); },
       get reduceFlashes() { return app.reduceFlashes; },
+      get audioState() { return app.audio.getAudioContextState(); },
+      get lastInputMask() { return app.lastInputMask; },
       resetSnapshotGap: () => { app.maxSnapshotGapMs = 0; app.lastSnapshotArrivalMs = performance.now(); },
       setReduceFlashes: (r: boolean) => { app.reduceFlashes = r; app.renderer.vfx.setReduceFlashes(r); },
       startRoundNow: () => app.startRoundNow(),

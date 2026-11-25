@@ -25,6 +25,15 @@ interface RibbonPoint {
   age: number;
 }
 
+interface RingParticle {
+  x: number;
+  y: number;
+  age: number;
+  maxAge: number;
+  maxRadius: number;
+  color: THREE.Color;
+}
+
 export interface VfxOptions {
   readonly tier: QualityTier;
   readonly reduceFlashes: boolean;
@@ -42,6 +51,7 @@ const MAX_DUST_BY_TIER: Record<QualityTier, number> = {
   [QualityTier.High]: 250,
 };
 
+const MAX_RINGS = 16;
 const IMPACT_MAX_PER_SECOND = 3;
 
 export class VfxSystem {
@@ -49,8 +59,10 @@ export class VfxSystem {
   private readonly chipMesh: THREE.InstancedMesh;
   private readonly dustMesh: THREE.InstancedMesh;
   private readonly shadowMesh: THREE.InstancedMesh;
+  private readonly ringMesh: THREE.InstancedMesh;
   private readonly chips: Particle[] = [];
   private readonly dust: Particle[] = [];
+  private readonly rings: RingParticle[] = [];
   private readonly ribbons = new Map<number, { line: THREE.Line; points: RibbonPoint[] }>();
   private readonly dummy = new THREE.Object3D();
   private readonly impactOverlay: HTMLDivElement;
@@ -90,7 +102,19 @@ export class VfxSystem {
     this.shadowMesh.count = 0;
     this.shadowMesh.frustumCulled = false;
 
-    this.group.add(this.chipMesh, this.dustMesh, this.shadowMesh);
+    const ringGeo = new THREE.RingGeometry(0.78, 0.92, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.ringMesh = new THREE.InstancedMesh(ringGeo, ringMat, MAX_RINGS);
+    this.ringMesh.count = 0;
+    this.ringMesh.frustumCulled = false;
+
+    this.group.add(this.chipMesh, this.dustMesh, this.shadowMesh, this.ringMesh);
 
     this.impactOverlay = document.createElement('div');
     this.impactOverlay.className = 'impact-frame';
@@ -157,6 +181,18 @@ export class VfxSystem {
         color: col,
       });
     }
+  }
+
+  public spawnRing(x: number, y: number, colorHex: string, maxRadius = 1.6, durationFrames = 14): void {
+    if (this.rings.length >= MAX_RINGS) this.rings.shift();
+    this.rings.push({
+      x,
+      y,
+      age: 0,
+      maxAge: Math.max(1, durationFrames),
+      maxRadius: Math.max(0.25, maxRadius),
+      color: new THREE.Color(colorHex),
+    });
   }
 
   /** Rate-limited Delft two-tone impact frame (<= 3 per second; border pulse when reduceFlashes is on). */
@@ -251,6 +287,44 @@ export class VfxSystem {
     }
     this.stepParticles(this.chips, this.chipMesh, dt, 26.0);
     this.stepParticles(this.dust, this.dustMesh, dt, -1.2);
+    this.stepRings(dt);
+  }
+
+  private stepRings(dt: number): void {
+    if (this.rings.length === 0) {
+      this.ringMesh.count = 0;
+      return;
+    }
+    const frameStep = Math.max(0, dt * 60);
+    for (let i = this.rings.length - 1; i >= 0; i--) {
+      const r = this.rings[i] as RingParticle;
+      r.age += frameStep;
+      if (r.age >= r.maxAge) {
+        this.rings.splice(i, 1);
+      }
+    }
+
+    for (let i = 0; i < this.rings.length; i++) {
+      const r = this.rings[i] as RingParticle;
+      const t = Math.max(0, Math.min(1, r.age / r.maxAge));
+      const invT = 1 - t;
+      const easeOut = 1 - invT * invT * invT;
+      const radius = 0.25 + (r.maxRadius - 0.25) * easeOut;
+      const tailFade = t > 0.65 ? Math.max(0.01, (1 - t) / 0.35) : 1.0;
+      const s = Math.max(0.01, radius * tailFade);
+
+      this.dummy.position.set(r.x, r.y, 0.25);
+      this.dummy.rotation.set(0, 0, 0);
+      this.dummy.scale.set(s, s, 1);
+      this.dummy.updateMatrix();
+      this.ringMesh.setMatrixAt(i, this.dummy.matrix);
+      this.ringMesh.setColorAt(i, r.color);
+    }
+    this.ringMesh.count = this.rings.length;
+    if (this.rings.length > 0) {
+      this.ringMesh.instanceMatrix.needsUpdate = true;
+      if (this.ringMesh.instanceColor) this.ringMesh.instanceColor.needsUpdate = true;
+    }
   }
 
   private stepParticles(list: Particle[], mesh: THREE.InstancedMesh, dt: number, gravity: number): void {
@@ -299,9 +373,11 @@ export class VfxSystem {
   public clear(): void {
     this.chips.length = 0;
     this.dust.length = 0;
+    this.rings.length = 0;
     this.chipMesh.count = 0;
     this.dustMesh.count = 0;
     this.shadowMesh.count = 0;
+    this.ringMesh.count = 0;
     for (const r of this.ribbons.values()) {
       r.points.length = 0;
       r.line.geometry.setDrawRange(0, 0);
@@ -326,6 +402,8 @@ export class VfxSystem {
     (this.dustMesh.material as THREE.Material).dispose();
     this.shadowMesh.geometry.dispose();
     (this.shadowMesh.material as THREE.Material).dispose();
+    this.ringMesh.geometry.dispose();
+    (this.ringMesh.material as THREE.Material).dispose();
     for (const r of this.ribbons.values()) {
       r.line.geometry.dispose();
       (r.line.material as THREE.Material).dispose();

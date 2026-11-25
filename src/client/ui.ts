@@ -1,10 +1,10 @@
 import { BotKind } from '@bots/enums';
 import type { RoomRosterData } from '@net/codec';
 import type { TransportDiagnostics } from '@net/transport';
-import { ArenaId, ChunkState, FighterId, FighterState, GadgetId, MatchMode, MoveId, NestaSize, TeamId } from '@sim/enums';
+import { ArenaId, ChunkState, FighterId, FighterState, GadgetId, InputBit, InputDir, MatchMode, MoveId, NestaSize, TeamId } from '@sim/enums';
 import { h, render } from 'preact';
 import type { AudioBusName } from './audio';
-import { GlazeFinish, KeyAction, QualityTier, ScreenId } from './enums';
+import { GlazeFinish, KeyAction, QualityTier, ScreenId, TouchControlsMode } from './enums';
 import type { KeyBindingMap, KeyPreset } from './input';
 import { type AppraisalId, type FighterProvenance, generateCeramicRoomCode } from './progression';
 import type { PerfReport } from './quality';
@@ -17,6 +17,7 @@ export interface UiCallbacks {
   readonly onOpenRoom: () => void;
   readonly onJoinRoom: (roomCode: string) => void;
   readonly onSoloPractice: () => void;
+  readonly onStartMatch: () => void;
   readonly onCopyInvite: () => Promise<boolean> | boolean;
   readonly onSelectFighter: (fighterId: FighterId) => void;
   readonly onSelectColour: (colourIndex: number) => void;
@@ -35,6 +36,7 @@ export interface UiCallbacks {
   readonly onCaptureCanvasPhoto: () => Promise<Blob | null> | Blob | null;
   readonly onCaptureSessionCard: () => Promise<Blob | null> | Blob | null;
   readonly onChangeQualityTier: (tier: QualityTier) => void;
+  readonly onChangeTouchControlsMode: (mode: TouchControlsMode) => void;
   readonly onChangeShakeScale: (scale: number) => void;
   readonly onChangeReduceFlashes: (reduce: boolean) => void;
   readonly onChangeVolume: (volume: number) => void;
@@ -44,6 +46,9 @@ export interface UiCallbacks {
   readonly onChangeKeyPreset: (preset: KeyPreset) => void;
   readonly onRebindKey: (action: KeyAction, code: string) => void;
   readonly onBuildPerfReport: () => PerfReport;
+  readonly onTouchStick: (dir: InputDir, isTilt: boolean) => void;
+  readonly onTouchBit: (bit: InputBit, active: boolean) => void;
+  readonly onTouchClear: () => void;
 }
 
 export interface FrameDataOverlayState {
@@ -110,10 +115,19 @@ export interface ResultsRenderState {
 }
 
 export interface SettingsViewState {
-  readonly qualityTier: QualityTier; readonly shakeScale: number; readonly reduceFlashes: boolean;
-  readonly volume: number; readonly volumeMusic: number; readonly volumeEffects: number; readonly volumeAuctioneer: number;
-  readonly muted: boolean; readonly colorBlindPatterns: boolean;
-  readonly keyPreset: KeyPreset; readonly keyBindings: KeyBindingMap;
+  readonly qualityTier: QualityTier;
+  readonly touchControlsMode: TouchControlsMode;
+  readonly frameDataEnabled: boolean;
+  readonly shakeScale: number;
+  readonly reduceFlashes: boolean;
+  readonly volume: number;
+  readonly volumeMusic: number;
+  readonly volumeEffects: number;
+  readonly volumeAuctioneer: number;
+  readonly muted: boolean;
+  readonly colorBlindPatterns: boolean;
+  readonly keyPreset: KeyPreset;
+  readonly keyBindings: KeyBindingMap;
 }
 
 export const SELECTABLE_BOT_KINDS: readonly BotKind[] = [BotKind.Chaser, BotKind.Brawler, BotKind.Sharp] as const;
@@ -167,13 +181,21 @@ function hudStateEqual(a: HudRenderState | null, b: HudRenderState): boolean {
   return true;
 }
 
+function detectTouchDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) return true;
+  return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+}
+
 export class GameUi {
   private readonly rootEl: HTMLElement;
   private readonly hostEl: HTMLDivElement;
   private readonly callbacks: UiCallbacks;
   private currentScreen: ScreenId = ScreenId.Title;
-  private titleRoomCode = generateCeramicRoomCode();
+  private titleRoomCode = '';
   private settingsOpen = false;
+  private guideOpen = false;
+  private isTouchDevice = detectTouchDevice();
   private settingsState: SettingsViewState | null = null;
   private perfReport: PerfReport | null = null;
   private lobbyState: LobbyRenderState | null = null;
@@ -185,15 +207,28 @@ export class GameUi {
   private sessionCardBlob: Blob | null = null;
   private sessionCardUrl: string | null = null;
 
+  private readonly onFirstTouch = (): void => {
+    if (!this.isTouchDevice) {
+      this.isTouchDevice = true;
+      this.flush();
+    }
+    window.removeEventListener('touchstart', this.onFirstTouch);
+  };
+
   public constructor(root: HTMLElement, initialSettings: SettingsViewState, callbacks: UiCallbacks) {
     this.rootEl = root;
     this.settingsState = initialSettings;
     this.rootEl.classList.toggle('cb-patterns', initialSettings.colorBlindPatterns);
     this.hostEl = document.createElement('div');
     root.appendChild(this.hostEl);
+    if (typeof window !== 'undefined' && !this.isTouchDevice) {
+      window.addEventListener('touchstart', this.onFirstTouch, { passive: true });
+    }
     this.callbacks = {
       ...callbacks,
       onChangeQualityTier: (tier) => { callbacks.onChangeQualityTier(tier); if (this.settingsState) this.syncSettings({ ...this.settingsState, qualityTier: tier }); },
+      onChangeTouchControlsMode: (mode) => { callbacks.onChangeTouchControlsMode(mode); if (this.settingsState) this.syncSettings({ ...this.settingsState, touchControlsMode: mode }); },
+      onToggleFrameData: (enabled) => { callbacks.onToggleFrameData(enabled); if (this.settingsState) this.syncSettings({ ...this.settingsState, frameDataEnabled: enabled }); },
       onChangeShakeScale: (scale) => { callbacks.onChangeShakeScale(scale); if (this.settingsState) this.syncSettings({ ...this.settingsState, shakeScale: scale }); },
       onChangeReduceFlashes: (reduce) => { callbacks.onChangeReduceFlashes(reduce); if (this.settingsState) this.syncSettings({ ...this.settingsState, reduceFlashes: reduce }); },
       onChangeVolume: (volume) => { callbacks.onChangeVolume(volume); if (this.settingsState) this.syncSettings({ ...this.settingsState, volume }); },
@@ -221,11 +256,15 @@ export class GameUi {
   public openSettings(state?: SettingsViewState): void {
     if (state !== undefined) this.settingsState = state;
     this.perfReport = this.callbacks.onBuildPerfReport();
+    this.guideOpen = false;
     this.settingsOpen = true;
     this.flush();
   }
   public closeSettings(): void { if (!this.settingsOpen) return; this.settingsOpen = false; this.flush(); }
   public isSettingsOpen(): boolean { return this.settingsOpen; }
+  public isOverlayOpen(): boolean { return this.settingsOpen || this.guideOpen; }
+  public openGuide(): void { this.settingsOpen = false; this.guideOpen = true; this.flush(); }
+  public closeGuide(): void { if (!this.guideOpen) return; this.guideOpen = false; this.flush(); }
   public toggleSettings(state?: SettingsViewState): void { if (this.settingsOpen) this.closeSettings(); else this.openSettings(state); }
   public syncSettings(state: SettingsViewState): void {
     this.settingsState = state;
@@ -251,10 +290,19 @@ export class GameUi {
     if (this.resultsState?.sessionChampionName !== null) await this.refreshSessionCard();
   }
   public destroy(): void {
+    if (typeof window !== 'undefined') window.removeEventListener('touchstart', this.onFirstTouch);
     render(null, this.hostEl);
     this.hostEl.remove();
     if (this.photoUrl !== null) { URL.revokeObjectURL(this.photoUrl); this.photoUrl = null; }
     if (this.sessionCardUrl !== null) { URL.revokeObjectURL(this.sessionCardUrl); this.sessionCardUrl = null; }
+  }
+
+  private isTouchControlsActive(): boolean {
+    if (this.settingsState === null) return false;
+    const mode = this.settingsState.touchControlsMode;
+    if (mode === TouchControlsMode.Always) return true;
+    if (mode === TouchControlsMode.Off) return false;
+    return this.isTouchDevice;
   }
 
   private async refreshPhoto(): Promise<void> {
@@ -276,14 +324,31 @@ export class GameUi {
   private flush(): void {
     if (this.settingsState === null) return;
     render(h(AppView, {
-      screen: this.currentScreen, titleRoomCode: this.titleRoomCode, settingsOpen: this.settingsOpen,
-      settingsState: this.settingsState, perfReport: this.perfReport, lobbyState: this.lobbyState,
-      hudState: this.hudState, errorState: this.errorState, resultsState: this.resultsState,
-      photoUrl: this.photoUrl, photoBlob: this.photoBlob,
-      sessionCardUrl: this.sessionCardUrl, sessionCardBlob: this.sessionCardBlob,
+      screen: this.currentScreen,
+      titleRoomCode: this.titleRoomCode,
+      settingsOpen: this.settingsOpen,
+      guideOpen: this.guideOpen,
+      touchControlsActive: this.isTouchControlsActive(),
+      isTouchDevice: this.isTouchDevice,
+      settingsState: this.settingsState,
+      perfReport: this.perfReport,
+      lobbyState: this.lobbyState,
+      hudState: this.hudState,
+      errorState: this.errorState,
+      resultsState: this.resultsState,
+      photoUrl: this.photoUrl,
+      photoBlob: this.photoBlob,
+      sessionCardUrl: this.sessionCardUrl,
+      sessionCardBlob: this.sessionCardBlob,
       callbacks: this.callbacks,
-      onOpenSettings: () => this.openSettings(), onCloseSettings: () => this.closeSettings(),
+      onOpenSettings: () => this.openSettings(),
+      onCloseSettings: () => this.closeSettings(),
+      onOpenGuide: () => this.openGuide(),
+      onCloseGuide: () => this.closeGuide(),
       onSetScreen: (next) => this.setScreen(next),
+      onTouchStick: this.callbacks.onTouchStick,
+      onTouchBit: this.callbacks.onTouchBit,
+      onTouchClear: this.callbacks.onTouchClear,
     }), this.hostEl);
   }
 }

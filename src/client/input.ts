@@ -142,12 +142,37 @@ function btnPressed(gp: Gamepad, idx: number): boolean {
   return b !== undefined && b.pressed;
 }
 
+export function formatKeyCode(code: string): string {
+  if (code.startsWith('Key') && code.length === 4) return code.slice(3);
+  if (code.startsWith('Digit') && code.length === 6) return code.slice(5);
+  switch (code) {
+    case 'Space': return 'Space';
+    case 'ShiftLeft':
+    case 'ShiftRight': return 'Shift';
+    case 'ArrowLeft': return '←';
+    case 'ArrowRight': return '→';
+    case 'ArrowUp': return '↑';
+    case 'ArrowDown': return '↓';
+    case 'ControlLeft':
+    case 'ControlRight': return 'Ctrl';
+    case 'AltLeft':
+    case 'AltRight': return 'Alt';
+    case 'Enter': return 'Enter';
+    case 'Tab': return 'Tab';
+    case 'Escape': return 'Esc';
+    default: return code;
+  }
+}
+
 export class InputCollector {
   private bindings: KeyBindingMap;
   private readonly pressed = new Set<string>();
   private lastHorizontal: -1 | 0 | 1 = 0;
   private attached = false;
   private tapJump = false;
+  private touchDir: InputDir = InputDir.Neutral;
+  private touchTilt = false;
+  private touchBits = 0;
 
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     const target = e.target as HTMLElement | null;
@@ -167,6 +192,7 @@ export class InputCollector {
   private readonly onBlur = (): void => {
     this.pressed.clear();
     this.lastHorizontal = 0;
+    this.clearTouch();
   };
 
   public constructor(storage: Storage | null = typeof localStorage !== 'undefined' ? localStorage : null) {
@@ -188,11 +214,30 @@ export class InputCollector {
     window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('blur', this.onBlur);
     this.pressed.clear();
+    this.clearTouch();
     this.attached = false;
   }
 
   public setTapJump(enabled: boolean): void {
     this.tapJump = enabled;
+  }
+
+  public setTouchStick(dir: InputDir, isTilt: boolean): void {
+    assert(Number.isInteger(dir) && dir >= InputDir.Neutral && dir <= InputDir.UpLeft, ErrorCode.InvalidEnumValue, `Invalid InputDir: ${String(dir)}`);
+    this.touchDir = dir;
+    this.touchTilt = isTilt;
+  }
+
+  public setTouchBit(bit: InputBit, active: boolean): void {
+    assert((bit & InputBit.DirMask) === 0 && (bit & ~0xffff) === 0, ErrorCode.InvalidEnumValue, `Invalid InputBit: ${String(bit)}`);
+    if (active) this.touchBits |= bit;
+    else this.touchBits &= ~bit;
+  }
+
+  public clearTouch(): void {
+    this.touchDir = InputDir.Neutral;
+    this.touchTilt = false;
+    this.touchBits = 0;
   }
 
   public getBindings(): KeyBindingMap {
@@ -265,6 +310,13 @@ export class InputCollector {
       if (Math.hypot(rx, ry) >= STICK_TILT_THRESHOLD) bits |= InputBit.Heavy;
       break;
     }
+
+    // Virtual touch input
+    if (this.touchDir !== InputDir.Neutral) {
+      dir = this.touchDir;
+      if (this.touchTilt) bits |= InputBit.Tilt;
+    }
+    bits |= this.touchBits;
 
     // Optional tap-jump
     if (this.tapJump && (dir === InputDir.Up || dir === InputDir.UpLeft || dir === InputDir.UpRight)) {

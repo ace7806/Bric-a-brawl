@@ -5,7 +5,7 @@ import type { CSSProperties } from 'preact';
 import { memo } from 'preact/compat';
 import { ScreenId } from '../enums';
 import type { FrameDataOverlayState, HudRenderState } from '../ui';
-import { playerColor } from './modals';
+import { playerColor, SoundIcon } from './modals';
 
 export enum TimerPhase { Normal = 0, LastCall = 1, SuddenDeath = 2, Practice = 3 }
 
@@ -87,11 +87,22 @@ function FrameDataPanel({ fd }: { readonly fd: FrameDataOverlayState }) {
   );
 }
 
-export const HudLayer = memo(({ visible, state }: { readonly visible: boolean; readonly state: HudRenderState | null }) => {
+export const HudLayer = memo(({
+  visible, state, muted, touchActive, onToggleMute, onOpenGuide, onOpenSettings,
+}: {
+  readonly visible: boolean;
+  readonly state: HudRenderState | null;
+  readonly muted: boolean;
+  readonly touchActive: boolean;
+  readonly onToggleMute: () => void;
+  readonly onOpenGuide: () => void;
+  readonly onOpenSettings: () => void;
+}) => {
   const hiddenStyle = visible ? undefined : { display: 'none' };
+  const layerCls = `hud-layer${touchActive ? ' with-touch' : ''}`;
   if (state === null) {
     return (
-      <div class="hud-layer" data-screen={ScreenId.Hud} style={hiddenStyle}>
+      <div class={layerCls} data-screen={ScreenId.Hud} style={hiddenStyle}>
         <div class="hud-timer paper"><div class="caps" /><div class="display hud-timer-clock">2:00</div><div class="island-strip" /></div>
         <div class="hud-feed" /><div class="hud-tags" />
       </div>
@@ -104,7 +115,7 @@ export const HudLayer = memo(({ visible, state }: { readonly visible: boolean; r
   const clockColor = timer.phase === TimerPhase.SuddenDeath ? 'var(--stamp)' : timer.phase === TimerPhase.LastCall ? 'var(--cobalt)' : 'var(--ink)';
   const netText = state.hostStruggling ? 'Host is struggling' : state.highLatencyMs !== null ? `High latency · ${Math.round(state.highLatencyMs)} ms` : '';
   return (
-    <div class="hud-layer" data-screen={ScreenId.Hud} style={hiddenStyle}>
+    <div class={layerCls} data-screen={ScreenId.Hud} style={hiddenStyle}>
       {state.offscreenBubbles.map((ob) => {
         const pct = Math.floor(ob.damage);
         return (
@@ -114,6 +125,13 @@ export const HudLayer = memo(({ visible, state }: { readonly visible: boolean; r
           </div>
         );
       })}
+      <div class="hud-corner-tools interactive">
+        <button type="button" class="icon-pill" title={muted ? 'Unmute audio' : 'Mute audio'} aria-label={muted ? 'Unmute audio' : 'Mute audio'} data-action="toggle-mute" onClick={onToggleMute}>
+          <SoundIcon muted={muted} />
+        </button>
+        <button type="button" class="icon-pill" title="How to play" aria-label="How to play" data-action="open-guide" onClick={onOpenGuide}>?</button>
+        <button type="button" class="icon-pill" title="Settings & Menu" aria-label="Settings" data-action="open-settings" onClick={onOpenSettings}>☰</button>
+      </div>
       <div class="hud-timer paper">
         <div class="caps">{meta}</div>
         <div class="display hud-timer-clock" style={{ color: clockColor }}>{timer.text}</div>
@@ -125,9 +143,7 @@ export const HudLayer = memo(({ visible, state }: { readonly visible: boolean; r
       <div class="hud-feed">{state.feedLines.map((line, i) => <div key={`${i}-${line}`} class="hud-feed-item">{line}</div>)}</div>
       {state.auctioneerBanner !== null && state.auctioneerBanner.length > 0 && <div class="serif hud-auctioneer">{state.auctioneerBanner}</div>}
       {netText.length > 0 && (
-        <div class="type" style="position:fixed;left:50%;top:114px;transform:translateX(-50%);background:rgba(243,237,226,.92);border:1.2px solid var(--warn);color:var(--ink);border-radius:999px;padding:2px 10px;font-size:11px;">
-          {netText}
-        </div>
+        <div class="type hud-net-warn">{netText}</div>
       )}
       <div class={`hud-tags${state.fighters.length > 4 ? ' compact' : ''}`}>
         {state.fighters.map((f) => {
@@ -142,7 +158,7 @@ export const HudLayer = memo(({ visible, state }: { readonly visible: boolean; r
                 <div class="stocks">{Array.from({ length: f.maxStocks }, (_, i) => <i key={i} class={i >= f.stocks ? 'lost' : undefined} style={{ background: hex }} />)}</div>
               </div>
               <div class="gilt"><i style={{ width: `${Math.min(100, Math.max(0, Math.round(f.gilt)))}%` }} /></div>
-              {f.comboCount >= 2 && <span style="position:absolute;left:10px;top:-14px;background:var(--stamp);color:#fff;font-family:var(--type);font-size:10px;font-weight:700;border-radius:6px;padding:1px 6px;border:1.2px solid var(--ink);">{`${f.comboCount} HIT`}</span>}
+              {f.comboCount >= 2 && <span class="combo-pill">{`${f.comboCount} HIT`}</span>}
             </div>
           );
         })}

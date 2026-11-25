@@ -3,25 +3,34 @@ import { BUILD_ID, PROTOCOL_VERSION } from '@net/config';
 import { ConnectionState, RoomPhase, SlotStatus } from '@net/enums';
 import { assertNever } from '@sim/assert';
 import { getArenaSpec, getFighterSpec, getGameData } from '@sim/data';
-import { ALL_ARENA_IDS, ALL_FIGHTER_IDS, FighterId, MatchMode } from '@sim/enums';
+import { ALL_ARENA_IDS, ALL_FIGHTER_IDS, FighterId, GadgetId, InputBit, InputDir, MatchMode } from '@sim/enums';
 import { useState } from 'preact/hooks';
 import { GlazeFinish, ScreenId } from '../enums';
 import { ALL_APPRAISAL_IDS, APPRAISAL_SPECS, type AppraisalId, type FighterProvenance } from '../progression';
 import type { PerfReport } from '../quality';
-import { generateRoomCode, SELECTABLE_BOT_KINDS, type ConnectionErrorState, type HudRenderState, type LobbyRenderState, type ResultsRenderState, type SettingsViewState, type UiCallbacks } from '../ui';
+import {
+  SELECTABLE_BOT_KINDS,
+  type ConnectionErrorState,
+  type HudRenderState,
+  type LobbyRenderState,
+  type ResultsRenderState,
+  type SettingsViewState,
+  type UiCallbacks,
+} from '../ui';
 import { cbShapeForColour, Disc, formatClock, HudLayer } from './hud';
-import { copyText, playerColor, SettingsModal } from './modals';
+import { copyText, HowToPlayModal, playerColor, SettingsModal, SoundIcon } from './modals';
+import { TouchControls } from './touch-controls';
 
 const MAX_BOTS = 3;
 const BOT_LABEL: Record<BotKind, string> = {
-  [BotKind.Masher]: 'Masher', [BotKind.Tape]: 'Tape', [BotKind.Chaser]: 'Chaser', [BotKind.Brawler]: 'Brawler',
-  [BotKind.Sharp]: 'Sharp', [BotKind.ParryBot]: 'Parry', [BotKind.BlockBot]: 'Block', [BotKind.Runner]: 'Runner',
+  [BotKind.Masher]: 'Masher', [BotKind.Tape]: 'Tape', [BotKind.Chaser]: 'Easy', [BotKind.Brawler]: 'Medium',
+  [BotKind.Sharp]: 'Hard', [BotKind.ParryBot]: 'Parry', [BotKind.BlockBot]: 'Block', [BotKind.Runner]: 'Runner',
 };
 const FIGHTER_TRICKS: Record<FighterId, string> = {
-  [FighterId.Earl]: 'Piping: Special-cancel normals and spend 50% gilt on burst steam pressure.',
-  [FighterId.Grog]: 'Stampede: Carries the first fighter he touches and does not stop at ledges.',
-  [FighterId.Nesta]: 'Nesting Pop: Sheds down a shell (Big -> Mid -> Small) to escape pressure.',
-  [FighterId.Moss]: 'Vine Snare: Long-range whip tethers foes and yanks rubble from afar.',
+  [FighterId.Earl]: 'Piping — cancel normals into steam specials and spend gilt for extra burst.',
+  [FighterId.Grog]: 'Stampede — barrel straight through rivals, carrying the first one you catch.',
+  [FighterId.Nesta]: 'Nesting Pop — shed down a shell (Big → Mid → Small) to slip out of danger.',
+  [FighterId.Moss]: 'Vine Snare — cast your fishing rod to yank rivals or rubble from afar.',
 };
 
 function diagCodeForState(s: ConnectionState): string {
@@ -36,10 +45,10 @@ function diagCodeForState(s: ConnectionState): string {
 
 function slotStatusLabel(s: SlotStatus, onPlatter: boolean): string {
   switch (s) {
-    case SlotStatus.Loading: return 'connecting';
-    case SlotStatus.Ready: return 'on platter';
-    case SlotStatus.Connected: return onPlatter ? 'on platter' : 'wandering';
-    case SlotStatus.Spectating: return 'spectating';
+    case SlotStatus.Loading: return 'joining';
+    case SlotStatus.Ready: return 'ready';
+    case SlotStatus.Connected: return onPlatter ? 'ready' : 'on saucer';
+    case SlotStatus.Spectating: return 'watching';
     case SlotStatus.Bot: return 'bot';
     default: return assertNever(s, 'slotStatusLabel');
   }
@@ -50,7 +59,7 @@ const Pips = ({ count, total }: { readonly count: number; readonly total: number
 );
 
 const BackstampSvg = () => (
-  <svg class="backstamp" viewBox="0 0 200 200" width="88" height="88">
+  <svg class="backstamp" viewBox="0 0 200 200" width="76" height="76">
     <defs><path id="bb-arcT" d="M 26,100 a 74,74 0 0,1 148,0" /><path id="bb-arcB" d="M 20,100 a 80,80 0 0,0 160,0" /></defs>
     <circle cx="100" cy="100" r="96" fill="none" stroke="#24459A" strokeWidth="3" />
     <circle cx="100" cy="100" r="89" fill="none" stroke="#24459A" strokeWidth="1" />
@@ -61,40 +70,70 @@ const BackstampSvg = () => (
   </svg>
 );
 
-function TitleScreen({ roomCode, callbacks, onOpenSettings }: { readonly roomCode: string; readonly callbacks: UiCallbacks; readonly onOpenSettings: () => void }) {
+function TitleScreen({
+  roomCode, muted, callbacks, onOpenGuide, onOpenSettings,
+}: {
+  readonly roomCode: string;
+  readonly muted: boolean;
+  readonly callbacks: UiCallbacks;
+  readonly onOpenGuide: () => void;
+  readonly onOpenSettings: () => void;
+}) {
   const [inputCode, setInputCode] = useState(roomCode);
   const [prevCode, setPrevCode] = useState(roomCode);
   const [error, setError] = useState('');
   if (roomCode !== prevCode) { setPrevCode(roomCode); setInputCode(roomCode); }
+
   const submitJoin = () => {
     const code = inputCode.trim();
-    if (code.length === 0) { setError('Enter a room code to join.'); return; }
-    setError(''); callbacks.onJoinRoom(code);
+    if (code.length === 0) { setError('Paste or type a room code to join.'); return; }
+    setError('');
+    callbacks.onJoinRoom(code);
   };
+
   return (
     <div class="title-screen" data-screen={ScreenId.Title}>
       <div class="title-panel">
-        <div class="title-brand"><BackstampSvg /><div class="caps">The Mantel Auction Rooms<br />Catalogue of the evening sale</div></div>
-        <div class="display title-logo">BRIC-A-<br />BRAWL</div>
-        <div class="serif title-sub">A party fighter for ornaments with grudges.</div>
+        <div class="title-brand">
+          <BackstampSvg />
+          <div class="caps">The Mantel Auction Rooms<br />2 to 8 players · one link</div>
+        </div>
+        <h1 class="display title-logo">BRIC-A-<br />BRAWL</h1>
+        <p class="serif title-sub">A party fighter for ornaments with grudges.</p>
         <hr class="rule" />
         <div class="title-actions">
-          <button type="button" class="btn primary" data-action="open-room" onClick={() => callbacks.onOpenRoom()}>Open room</button>
-          <div class="title-join-row">
-            <button type="button" class="btn" data-action="join-room" onClick={submitJoin}>Join room</button>
-            <input type="text" class="input-line" placeholder="chipped-gravy-boat" aria-label="Room code" value={inputCode} onInput={(e) => setInputCode(e.currentTarget.value)} />
-            <button type="button" class="chip" title="New room code" onClick={() => { setInputCode(generateRoomCode()); setError(''); }}>↻</button>
+          <div class="title-primary-row">
+            <button type="button" class="btn primary" data-action="open-room" onClick={() => callbacks.onOpenRoom()}>Open room</button>
+            <button type="button" class="btn" data-action="solo-practice" onClick={() => callbacks.onSoloPractice()}>Play solo</button>
           </div>
-          <button type="button" class="btn small" data-action="solo-practice" onClick={() => callbacks.onSoloPractice()}>Solo practice</button>
-          <div class="type" style="color:var(--stamp);font-size:12px;min-height:16px;">{error}</div>
+          <div class="title-join-row">
+            <input
+              type="text"
+              class="input-line"
+              placeholder="Enter room code…"
+              aria-label="Room code"
+              value={inputCode}
+              onInput={(e) => { setInputCode(e.currentTarget.value); if (error) setError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') submitJoin(); }}
+            />
+            <button type="button" class="btn small" data-action="join-room" onClick={submitJoin}>Join</button>
+          </div>
+          {error.length > 0 && <div class="type title-error">{error}</div>}
         </div>
         <hr class="rule" />
-        <div class="title-links"><button type="button" class="link-btn" onClick={onOpenSettings}>Settings & Perf</button></div>
-      </div>
-      <div class="caps title-foot">{`2 to 8 players · one link · nothing to install · v${BUILD_ID} · protocol ${PROTOCOL_VERSION}`}</div>
-      <div class="card paper type title-hint">
-        <div class="caps" style="margin-bottom:4px">Live saucer behind you</div>
-        <span class="key">WASD</span>move &nbsp;<span class="key">Space</span>jump &nbsp;<span class="key">J</span>hit &nbsp;<span class="key">L</span>special &nbsp;<span class="key">Shift</span>guard
+        <div class="title-links">
+          <button type="button" class="link-btn" data-action="open-guide" onClick={onOpenGuide}>How to play</button>
+          <button type="button" class="link-btn" data-action="open-settings" onClick={onOpenSettings}>Settings</button>
+          <button
+            type="button"
+            class="link-btn title-sound-btn"
+            data-action="toggle-mute"
+            onClick={() => callbacks.onChangeMuted(!muted)}
+          >
+            <SoundIcon muted={muted} />
+            <span>{muted ? 'Sound off' : 'Sound on'}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -113,33 +152,50 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
     ['Weight', pip(s.weight * 2.8)], ['Speed', pip((s.run - 5) / 1.1)], ['Reach', pip(s.grabRange * 2.2)],
     ['Recovery', pip(s.doubleJump + s.airSpeed * 0.3 - 1.5)], ['Launch', pip(s.crackMult * 2.5)],
   ];
+  const unlockedFinishes = ALL_APPRAISAL_IDS.filter((aid) => unlockedSet.has(aid));
+  const lockedFinishes = ALL_APPRAISAL_IDS.filter((aid) => !unlockedSet.has(aid));
+
   return (
-    <div class="catalogue-backdrop" data-screen={ScreenId.CharSelect}>
+    <div class="catalogue-backdrop" data-screen={ScreenId.CharSelect} onClick={(e) => { if (e.target === e.currentTarget) onBack(); }}>
       <div class="catalogue-spread paper">
         <div class="catalogue-list">
-          <div class="caps">The Catalogue</div><div class="display" style="font-size:34px">Tonight's lots</div><hr class="rule2" />
-          {ALL_FIGHTER_IDS.map((fid, i) => {
-            const fs = getFighterSpec(fid);
-            return (
-              <div key={fid} class={`lot-item${fid === fighterId ? ' sel' : ''}`} onClick={() => callbacks.onSelectFighter(fid)}>
-                <div class="caps">{`Lot ${i + 1}`}</div><div class="display" style="font-size:26px">{fs.name}</div>
-                <div class="type" style="font-size:11.5px;color:var(--ink-soft);">{`${fs.role} · diff ${fs.difficulty}/3`}</div>
-              </div>
-            );
-          })}
-          <button type="button" class="btn small primary" style="margin-top:12px" onClick={onBack}>Back to lobby</button>
+          <div class="catalogue-list-head">
+            <div>
+              <div class="caps">The Catalogue</div>
+              <div class="display" style="font-size:28px">Choose a Lot</div>
+            </div>
+            <button type="button" class="btn small primary" onClick={onBack}>Done</button>
+          </div>
+          <hr class="rule2" />
+          <div class="catalogue-lots">
+            {ALL_FIGHTER_IDS.map((fid, i) => {
+              const fs = getFighterSpec(fid);
+              return (
+                <button key={fid} type="button" data-fighter={fid} class={`lot-item${fid === fighterId ? ' sel' : ''}`} onClick={() => callbacks.onSelectFighter(fid)}>
+                  <div class="caps">{`Lot ${i + 1}`}</div>
+                  <div class="display" style="font-size:24px">{fs.name}</div>
+                  <div class="type" style="font-size:11px;color:var(--ink-soft);">{fs.role}</div>
+                </button>
+              );
+            })}
+          </div>
         </div>
         <div class="catalogue-detail">
           <div class="caps">{`Lot ${ALL_FIGHTER_IDS.indexOf(fighterId) + 1} · ${spec.ornament}`}</div>
-          <div class="display" style="font-size:58px">{spec.name}</div>
-          <div class="serif" style="font-style:italic;font-size:17px;margin-bottom:8px;">{`${spec.role} · Difficulty ${spec.difficulty}/3`}</div>
-          <div class="provenance-line type">
-            {`Provenance: ${prov.roundsPlayed} rounds · ${prov.wins} wins · ${prov.kos} KOs · Last exit: ${prov.mostEmbarrassingExit}`}
+          <div class="display catalogue-name">{spec.name}</div>
+          <div class="serif" style="font-style:italic;font-size:16px;margin-bottom:10px;">{`${spec.role} · Difficulty ${spec.difficulty}/3`}</div>
+          {prov.roundsPlayed > 0 && (
+            <div class="provenance-line type">
+              {`${prov.roundsPlayed} rounds · ${prov.wins} wins · ${prov.kos} KOs · Last exit: ${prov.mostEmbarrassingExit}`}
+            </div>
+          )}
+          <div class="catalogue-trick">
+            <div class="caps">Signature Move</div>
+            <div>{FIGHTER_TRICKS[fighterId]}</div>
           </div>
-          <div>{bars.map(([label, n]) => <div key={label} class="stat-bar"><span class="caps">{label}</span><span class="stat-pips"><Pips count={n} total={5} /></span></div>)}</div>
-          <div style="margin-top:12px;border:1.5px solid var(--ink);border-radius:8px;padding:8px 12px;background:#fff;"><div class="caps">Signature trick</div><div>{FIGHTER_TRICKS[fighterId]}</div></div>
+          <div style="margin-top:10px">{bars.map(([label, n]) => <div key={label} class="stat-bar"><span class="caps">{label}</span><span class="stat-pips"><Pips count={n} total={5} /></span></div>)}</div>
           <div style="margin-top:14px">
-            <div class="caps">Glaze (your colour) · numbers show taken slots</div>
+            <div class="caps">Glaze colour</div>
             <div class="swatch-row" style="margin-top:8px">
               {getGameData().palette.players.map((p, i) => {
                 const owner = takenBySlot.get(i); const taken = owner !== undefined && i !== colourIndex;
@@ -150,28 +206,41 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
                   </button>
                 );
               })}
-              <span class="type" style="font-size:13px">{playerColor(colourIndex).name}</span>
+              <span class="type" style="font-size:12.5px">{playerColor(colourIndex).name}</span>
             </div>
           </div>
           <div style="margin-top:14px">
-            <div class="caps">{`Glaze finish (${unlockedAppraisals.length}/12 appraisals unlocked)`}</div>
+            <div class="caps">{`Glaze finish (${unlockedFinishes.length}/${ALL_APPRAISAL_IDS.length} unlocked)`}</div>
             <div class="finish-chips">
               <button type="button" class={`chip${equippedFinish === GlazeFinish.Standard ? ' on' : ''}`} onClick={() => callbacks.onSelectGlazeFinish(GlazeFinish.Standard)}>
                 Standard
               </button>
-              {ALL_APPRAISAL_IDS.map((aid) => {
+              {unlockedFinishes.map((aid) => {
                 const aspec = APPRAISAL_SPECS[aid];
-                const unlocked = unlockedSet.has(aid);
                 return (
-                  <button key={aid} type="button" disabled={!unlocked}
-                    title={unlocked ? `${aspec.title}: ${aspec.criteria}` : `Locked — ${aspec.title}: ${aspec.criteria}`}
+                  <button key={aid} type="button" title={`${aspec.title}: ${aspec.criteria}`}
                     class={`chip${equippedFinish === aspec.reward ? ' on' : ''}`}
                     onClick={() => callbacks.onSelectGlazeFinish(aspec.reward)}>
-                    {unlocked ? aspec.rewardLabel : `🔒 ${aspec.rewardLabel}`}
+                    {aspec.rewardLabel}
                   </button>
                 );
               })}
             </div>
+            {lockedFinishes.length > 0 && (
+              <details class="settings-details" style="margin-top:8px">
+                <summary class="caps">{`Locked finishes (${lockedFinishes.length})`}</summary>
+                <div class="finish-chips" style="margin-top:8px">
+                  {lockedFinishes.map((aid) => {
+                    const aspec = APPRAISAL_SPECS[aid];
+                    return (
+                      <span key={aid} class="chip locked-chip" title={`${aspec.title}: ${aspec.criteria}`}>
+                        {`${aspec.rewardLabel} — ${aspec.criteria}`}
+                      </span>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
           </div>
         </div>
       </div>
@@ -179,11 +248,23 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
   );
 }
 
-function LobbyScreen({ state, showCatalogue, callbacks, onSetScreen, onOpenSettings }: {
-  readonly state: LobbyRenderState; readonly showCatalogue: boolean; readonly callbacks: UiCallbacks; readonly onSetScreen: (s: ScreenId) => void; readonly onOpenSettings: () => void;
+function LobbyScreen({
+  state, showCatalogue, muted, touchActive, callbacks, onSetScreen, onOpenGuide, onOpenSettings,
+}: {
+  readonly state: LobbyRenderState;
+  readonly showCatalogue: boolean;
+  readonly muted: boolean;
+  readonly touchActive: boolean;
+  readonly callbacks: UiCallbacks;
+  readonly onSetScreen: (s: ScreenId) => void;
+  readonly onOpenGuide: () => void;
+  readonly onOpenSettings: () => void;
 }) {
   const [botKind, setBotKind] = useState<BotKind>(BotKind.Chaser);
   const [copyStatus, setCopyStatus] = useState({ ok: true, text: '' });
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [rosterOpenMobile, setRosterOpenMobile] = useState(false);
+
   const { roster, selfPeerId, rttByPeerMs, onPlatterSlots } = state;
   const isHost = roster.hostId === selfPeerId;
   const maxPlayers = getGameData().tuning.net.maxPlayers;
@@ -194,71 +275,172 @@ function LobbyScreen({ state, showCatalogue, callbacks, onSetScreen, onOpenSetti
   const takenBySlot = new Map(roster.slots.map((s) => [s.colourIndex, s.slot + 1]));
   const active = roster.slots.filter((s) => s.status !== SlotStatus.Spectating);
   const isReady = (s: typeof active[number]) => s.status === SlotStatus.Bot || s.status === SlotStatus.Ready || onPlatterSlots.has(s.slot);
+  const canStart = isHost && active.length >= 2 && roster.phase === RoomPhase.Lobby;
+  const isSoloLocal = selfPeerId === 'local';
+
   return (
     <>
-      <div class="lobby-screen" data-screen={ScreenId.Lobby}>
+      <div class={`lobby-screen${touchActive ? ' with-touch' : ''}`} data-screen={ScreenId.Lobby}>
+        {/* Top-left compact room & utility bar */}
         <div class="card paper lobby-room">
-          <div class="caps">Room</div><div class="display lobby-room-code">{state.roomCode}</div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-            <button type="button" class="btn small primary" data-action="copy-invite" onClick={() => void Promise.resolve(callbacks.onCopyInvite()).then((ok) => setCopyStatus({ ok, text: ok ? 'Copied invite link.' : 'Copy failed (clipboard blocked).' }))}>Copy invite</button>
-            <span class="type" style={{ fontSize: '12px', fontWeight: 700, color: copyStatus.ok ? 'var(--ok)' : 'var(--stamp)' }}>{copyStatus.text}</span>
-          </div>
-        </div>
-        <div class="card paper lobby-roster">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;"><div class="caps">Lots in the room</div><span class="caps">{`${roster.slots.length} of ${maxPlayers}`}</span></div>
-          <hr class="rule" />
-          <div>{roster.slots.map((s) => {
-            const rttMs = rttByPeerMs.get(s.peerId);
-            const rttLabel = s.peerId === selfPeerId ? 'you' : s.status === SlotStatus.Bot ? 'CPU' : rttMs !== undefined ? `${Math.round(rttMs)} ms` : '...';
-            const barCount = s.status === SlotStatus.Loading ? 0 : rttMs === undefined || rttMs <= 45 ? 4 : rttMs <= 90 ? 3 : rttMs <= 150 ? 2 : 1;
-            return (
-              <div key={s.slot} class="lobby-row">
-                <Disc slot={s.slot} colourIndex={s.colourIndex} />
-                <div><div class="nm">{s.name}</div><div class="sub">{`${getFighterSpec(s.fighterId).name}${s.peerId === roster.hostId ? ' · host' : ''}`}</div></div>
-                <div class="type" style="font-size:12px;color:var(--ink-soft);">{rttLabel}</div>
-                <div style="display:flex;gap:8px;align-items:center;">
-                  <span class={rttMs !== undefined && rttMs > 100 ? 'bars warn' : 'bars'}>{Array.from({ length: 4 }, (_, i) => <i key={i} class={i >= barCount ? 'off' : undefined} style={{ height: `${4 + i * 3}px` }} />)}</span>
-                  <span class="type" style="font-size:12px;width:78px;">{slotStatusLabel(s.status, onPlatterSlots.has(s.slot))}</span>
-                </div>
-              </div>
-            );
-          })}</div>
-          <div style="display:flex;gap:6px;align-items:center;justify-content:space-between;padding-top:8px;border-top:1px solid rgba(43,38,35,.25);margin-top:6px;flex-wrap:wrap;">
-            <span class="caps">Bots (max 3)</span>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <select class="chip" disabled={!isHost} value={botKind} onChange={(e) => setBotKind(Number(e.currentTarget.value) as BotKind)}>
-                {SELECTABLE_BOT_KINDS.map((bk) => <option key={bk} value={bk}>{BOT_LABEL[bk]}</option>)}
-              </select>
-              <button type="button" class="chip" data-action="add-bot" disabled={!isHost || botCount >= MAX_BOTS || roster.slots.length >= maxPlayers} onClick={() => callbacks.onAddBot(botKind)}>+ Bot</button>
-              <button type="button" class="chip" data-action="remove-bot" disabled={!isHost || botCount === 0} onClick={() => callbacks.onRemoveBot()}>- Bot</button>
+          <div class="lobby-room-top">
+            <div class="lobby-room-meta">
+              <div class="caps">{isSoloLocal ? 'Solo Saucer' : 'Room'}</div>
+              <div class="display lobby-room-code">{isSoloLocal ? 'Practice' : state.roomCode}</div>
+            </div>
+            <div class="lobby-icon-group">
+              <button type="button" class="icon-pill" title={muted ? 'Unmute audio' : 'Mute audio'} aria-label={muted ? 'Unmute audio' : 'Mute audio'} data-action="toggle-mute" onClick={() => callbacks.onChangeMuted(!muted)}>
+                <SoundIcon muted={muted} />
+              </button>
+              <button type="button" class="icon-pill" title="How to play" aria-label="How to play" data-action="open-guide" onClick={onOpenGuide}>?</button>
+              <button type="button" class="icon-pill" title="Settings" aria-label="Settings" data-action="open-settings" onClick={onOpenSettings}>☰</button>
             </div>
           </div>
+          {!isSoloLocal && (
+            <div class="lobby-invite-row">
+              <button
+                type="button"
+                class="btn small primary"
+                data-action="copy-invite"
+                onClick={() => void Promise.resolve(callbacks.onCopyInvite()).then((ok) => setCopyStatus({ ok, text: ok ? 'Copied invite link.' : 'Copy failed.' }))}
+              >
+                Copy invite
+              </button>
+              {copyStatus.text.length > 0 && (
+                <span class="type" style={{ fontSize: '11.5px', fontWeight: 700, color: copyStatus.ok ? 'var(--ok)' : 'var(--stamp)' }}>
+                  {copyStatus.text}
+                </span>
+              )}
+            </div>
+          )}
         </div>
-        <div class="card paper lobby-platter">
-          <div class="display" style="font-size:24px">{roster.phase === RoomPhase.Countdown ? `Starting in ${Math.max(1, Math.ceil(roster.countdownTicks / getGameData().tuning.tickRate))}…` : 'Stand on the gold platter for 3s to start'}</div>
-          <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;align-items:center;flex-wrap:wrap;">
-            {active.map((s) => { const hex = playerColor(s.colourIndex).hex; return <Disc key={s.slot} slot={s.slot} colourIndex={s.colourIndex} style={isReady(s) ? undefined : { background: 'transparent', border: `2px dashed ${hex}`, color: hex, boxShadow: 'none' }} />; })}
+
+        {/* Top-right roster card (collapsible drawer on narrow mobile screens) */}
+        <div class={`lobby-roster-wrap${rosterOpenMobile ? ' open' : ''}`}>
+          <button type="button" class="card paper lobby-roster-toggle type" onClick={() => setRosterOpenMobile((v) => !v)}>
+            <span>{`Lots (${roster.slots.length}/${maxPlayers})`}</span>
+            <span>{rosterOpenMobile ? '▴' : '▾'}</span>
+          </button>
+          <div class="card paper lobby-roster">
+            <div class="lobby-roster-head">
+              <div class="caps">Lots in room</div>
+              <span class="caps">{`${roster.slots.length} / ${maxPlayers}`}</span>
+            </div>
+            <hr class="rule" />
+            <div>{roster.slots.map((s) => {
+              const rttMs = rttByPeerMs.get(s.peerId);
+              const rttLabel = s.peerId === selfPeerId ? 'you' : s.status === SlotStatus.Bot ? 'CPU' : rttMs !== undefined ? `${Math.round(rttMs)}ms` : '…';
+              const barCount = s.status === SlotStatus.Loading ? 0 : rttMs === undefined || rttMs <= 45 ? 4 : rttMs <= 90 ? 3 : rttMs <= 150 ? 2 : 1;
+              return (
+                <div key={s.slot} class="lobby-row">
+                  <Disc slot={s.slot} colourIndex={s.colourIndex} />
+                  <div class="lobby-row-name">
+                    <div class="nm">{s.name}</div>
+                    <div class="sub">{`${getFighterSpec(s.fighterId).name}${s.peerId === roster.hostId ? ' · host' : ''}`}</div>
+                  </div>
+                  <div class="type" style="font-size:11px;color:var(--ink-soft);">{rttLabel}</div>
+                  <div class="lobby-row-state">
+                    <span class={rttMs !== undefined && rttMs > 100 ? 'bars warn' : 'bars'}>
+                      {Array.from({ length: 4 }, (_, i) => <i key={i} class={i >= barCount ? 'off' : undefined} style={{ height: `${4 + i * 3}px` }} />)}
+                    </span>
+                    <span class="type" style="font-size:11px;">{slotStatusLabel(s.status, onPlatterSlots.has(s.slot))}</span>
+                  </div>
+                </div>
+              );
+            })}</div>
+            {isHost && (
+              <div class="lobby-bots-row">
+                <select class="chip" aria-label="Bot difficulty" value={botKind} onChange={(e) => setBotKind(Number(e.currentTarget.value) as BotKind)}>
+                  {SELECTABLE_BOT_KINDS.map((bk) => <option key={bk} value={bk}>{`${BOT_LABEL[bk]} Bot`}</option>)}
+                </select>
+                <div style="display:flex;gap:5px;">
+                  <button type="button" class="chip" data-action="add-bot" disabled={botCount >= MAX_BOTS || roster.slots.length >= maxPlayers} onClick={() => callbacks.onAddBot(botKind)}>+ Bot</button>
+                  <button type="button" class="chip" data-action="remove-bot" disabled={botCount === 0} onClick={() => callbacks.onRemoveBot()}>− Bot</button>
+                </div>
+              </div>
+            )}
           </div>
-          <div class="type" style="font-size:12px;color:var(--ink-soft);margin-top:6px;">{`${active.filter(isReady).length} of ${active.length} ready · ${getArenaSpec(roster.arenaId).name}`}</div>
         </div>
-        <div class="lobby-settings">
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-            <button type="button" class="btn small primary" data-action="open-catalogue" onClick={() => onSetScreen(ScreenId.CharSelect)}>Catalogue</button>
-            {ALL_FIGHTER_IDS.map((fid) => <button key={fid} type="button" data-fighter={fid} class={`chip${fid === selfFighter ? ' on' : ''}`} onClick={() => callbacks.onSelectFighter(fid)}>{getFighterSpec(fid).name}</button>)}
+
+        {/* Single clean centered bottom dock (no overlapping corner piles!) */}
+        <div class="lobby-dock">
+          {optionsOpen && (
+            <div class="card paper lobby-options-pop">
+              <div class="lobby-opt-group">
+                <div class="caps">Arena</div>
+                <div class="lobby-opt-chips">
+                  {ALL_ARENA_IDS.map((aid) => (
+                    <button key={aid} type="button" data-arena={aid} disabled={!isHost} class={`chip${aid === roster.arenaId ? ' on' : ''}`} onClick={() => callbacks.onSelectArena(aid)}>
+                      {getArenaSpec(aid).name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div class="lobby-opt-group">
+                <div class="caps">Rules</div>
+                <div class="lobby-opt-chips">
+                  {[MatchMode.FreeForAll, MatchMode.Teams].map((m) => (
+                    <button key={m} type="button" disabled={!isHost} class={`chip${m === roster.settings.mode ? ' on' : ''}`} onClick={() => callbacks.onSelectMode(m)}>
+                      {m === MatchMode.FreeForAll ? 'Free-for-all' : 'Teams'}
+                    </button>
+                  ))}
+                  <button type="button" disabled={!isHost} class={`chip${roster.settings.fragile ? ' on' : ''}`} onClick={() => callbacks.onToggleFragile(!roster.settings.fragile)}>
+                    {`Fragile: ${roster.settings.fragile ? 'On' : 'Off'}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div class="card paper lobby-dock-bar">
+            <div class="lobby-dock-left">
+              <button type="button" class="btn small" data-action="open-catalogue" onClick={() => { setOptionsOpen(false); onSetScreen(ScreenId.CharSelect); }}>
+                <span class="dock-swatch" style={{ background: playerColor(selfColour).hex }} />
+                <span>{getFighterSpec(selfFighter).name}</span>
+              </button>
+              <button
+                type="button"
+                class={`btn small${optionsOpen ? ' active-opt' : ''}`}
+                data-action="toggle-match-options"
+                onClick={() => setOptionsOpen((v) => !v)}
+              >
+                {`${getArenaSpec(roster.arenaId).name}${roster.settings.fragile ? ' · Fragile' : ''} ${optionsOpen ? '▾' : '▴'}`}
+              </button>
+            </div>
+
+            <div class="lobby-dock-right">
+              <div class="lobby-ready-pips" aria-label="Ready status">
+                {active.map((s) => {
+                  const hex = playerColor(s.colourIndex).hex;
+                  return (
+                    <Disc
+                      key={s.slot}
+                      slot={s.slot}
+                      colourIndex={s.colourIndex}
+                      style={isReady(s) ? undefined : { background: 'transparent', border: `2px dashed ${hex}`, color: hex, boxShadow: 'none' }}
+                    />
+                  );
+                })}
+              </div>
+              {roster.phase === RoomPhase.Countdown ? (
+                <span class="display lobby-countdown">
+                  {`Starting in ${Math.max(1, Math.ceil(roster.countdownTicks / getGameData().tuning.tickRate))}…`}
+                </span>
+              ) : canStart ? (
+                <button type="button" class="btn small primary" data-action="start-match" onClick={() => { setOptionsOpen(false); callbacks.onStartMatch(); }}>
+                  Start round
+                </button>
+              ) : isHost ? (
+                <button type="button" class="btn small primary" onClick={() => callbacks.onAddBot(botKind)}>
+                  + Add bot to start
+                </button>
+              ) : (
+                <span class="type" style="font-size:11.5px;color:var(--ink-soft);">Stand on gold ring</span>
+              )}
+            </div>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            {ALL_ARENA_IDS.map((aid) => <button key={aid} type="button" data-arena={aid} disabled={!isHost} class={`chip${aid === roster.arenaId ? ' on' : ''}`} onClick={() => callbacks.onSelectArena(aid)}>{getArenaSpec(aid).name}</button>)}
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            {[MatchMode.FreeForAll, MatchMode.Teams].map((m) => <button key={m} type="button" disabled={!isHost} class={`chip${m === roster.settings.mode ? ' on' : ''}`} onClick={() => callbacks.onSelectMode(m)}>{m === MatchMode.FreeForAll ? 'Free-for-all' : 'Teams'}</button>)}
-            <button type="button" disabled={!isHost} class={`chip${roster.settings.fragile ? ' on' : ''}`} onClick={() => callbacks.onToggleFragile(!roster.settings.fragile)}>{`Fragile: ${roster.settings.fragile ? 'On' : 'Off'}`}</button>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button type="button" class="chip" data-action="open-settings" onClick={onOpenSettings}>Settings & Perf</button>
-            <button type="button" class={`chip${state.frameDataEnabled ? ' on' : ''}`} onClick={() => callbacks.onToggleFrameData(!state.frameDataEnabled)}>{`Frame data: ${state.frameDataEnabled ? 'On' : 'Off'}`}</button>
-          </div>
+          {canStart && <div class="lobby-platter-hint type">Or stand on the gold ring for 3s · press C for Catalogue</div>}
         </div>
-        <div class="card paper type lobby-controls"><span class="key">E</span>Catalogue &nbsp;<span class="key">T</span>taunt &nbsp;<span class="key">Tab</span>frame data &nbsp;<span class="key">Esc</span>settings</div>
       </div>
       {showCatalogue && (
         <CatalogueModal fighterId={selfFighter} colourIndex={selfColour} equippedFinish={state.equippedFinish}
@@ -292,19 +474,19 @@ function ConnectionErrorScreen({ state, callbacks }: { readonly state: Connectio
     <div class="error-screen paper" data-screen={ScreenId.ConnectionError}>
       <div>
         <div class="caps">{`Room ${state.roomCode} · you are Lot ${state.localSlot + 1}`}</div>
-        <div class="display error-headline">{headline}</div><div style="font-size:18px;line-height:1.45;">{body}</div>
+        <div class="display error-headline">{headline}</div><div style="font-size:17px;line-height:1.45;">{body}</div>
         {cand !== undefined && (
           <div class="error-fix-box">
             <div class="caps" style="color:var(--ok)">Quickest fix</div>
-            <div style="font-size:17px;margin:4px 0 12px;">{`${cand.name} can reach everyone in the room, including you. If they host, you’re in.`}</div>
+            <div style="font-size:16px;margin:4px 0 12px;">{`${cand.name} can reach everyone in the room, including you. If they host, you’re in.`}</div>
             <button type="button" class="btn primary small" onClick={() => callbacks.onAskPeerToHost(cand.peerId)}>{`Ask ${cand.name} to host`}</button>
           </div>
         )}
         <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
           {isMismatch ? <button type="button" class="btn primary small" data-action="refresh-build" onClick={() => callbacks.onHardRefresh()}>Refresh build</button> : <button type="button" class="btn small" onClick={() => callbacks.onRetryConnection()}>Try again</button>}
-          <button type="button" class="btn small" onClick={() => callbacks.onPlayOfflinePractice()}>Play offline practice</button>
+          <button type="button" class="btn small" onClick={() => callbacks.onPlayOfflinePractice()}>Play solo instead</button>
         </div>
-        <div class="error-tips"><div class="caps">If that doesn’t work, from most to least likely</div><ol>{tips.map((t) => <li key={t}>{t}</li>)}</ol></div>
+        <div class="error-tips"><div class="caps">Try in order</div><ol>{tips.map((t) => <li key={t}>{t}</li>)}</ol></div>
       </div>
       <div class="error-right">
         <div class="card paper">
@@ -319,15 +501,14 @@ function ConnectionErrorScreen({ state, callbacks }: { readonly state: Connectio
           </div>
         </div>
         <div class="card paper type" style="font-size:12px;line-height:1.6;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <div class="caps">For whoever is helping you</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">
+            <div class="caps">Diagnostics</div>
             <span class="type" style={{ fontSize: '11px', color: copyStatus.ok ? 'var(--ok)' : 'var(--stamp)' }}>{copyStatus.text}</span>
             <button type="button" class="chip" onClick={() => void copyText(lines.join('\n')).then((res) => setCopyStatus({ ok: res.ok, text: res.status }))}>Copy diagnostics</button>
           </div>
           <div>{lines.map((line, i) => <span key={i}>{i > 0 && <br />}{line}</span>)}</div>
         </div>
       </div>
-      <div class="caps error-foot">Roughly one connection in eight fails like this without a relay. Adding one later is a single config entry.</div>
     </div>
   );
 }
@@ -363,11 +544,11 @@ function ResultsScreen({ state, roomCode, photoUrl, photoBlob, sessionCardUrl, s
   return (
     <div class="results-screen paper" data-screen={ScreenId.Results}>
       <div class="results-head">
-        <div class="caps">{`Lot ${state.roundNumber} · ${getArenaSpec(state.arenaId).name} · hammer fell at ${formatClock(Math.round(state.endTick / tuning.tickRate))}`}</div>
+        <div class="caps">{`Lot ${state.roundNumber} · ${getArenaSpec(state.arenaId).name} · ${formatClock(Math.round(state.endTick / tuning.tickRate))}`}</div>
         <div class="display results-title" style={{ color: playerColor(state.winnerColourIndex).hex }}>{`Sold to ${state.winnerName}`}</div>
         {state.newlyUnlocked.length > 0 && (
           <div class="unlock-banner type">
-            {`Appraisal unlocked: ${state.newlyUnlocked.map((id) => `${APPRAISAL_SPECS[id].title} (${APPRAISAL_SPECS[id].rewardLabel})`).join(' · ')}`}
+            {`Unlocked: ${state.newlyUnlocked.map((id) => `${APPRAISAL_SPECS[id].title} (${APPRAISAL_SPECS[id].rewardLabel})`).join(' · ')}`}
           </div>
         )}
       </div>
@@ -375,20 +556,19 @@ function ResultsScreen({ state, roomCode, photoUrl, photoBlob, sessionCardUrl, s
         <div class="results-photo">
           <div class="delft-frame"><img alt={showSessionCard ? 'Session summary card' : 'Match capture'} src={activeUrl !== null ? activeUrl : undefined} /></div>
           <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px;gap:8px;flex-wrap:wrap;">
-            <div class="type" style="font-size:12.5px">{`bric-a-brawl · ${roomCode !== null ? roomCode : 'session'}`}</div>
+            <div class="type" style="font-size:12px;color:var(--ink-soft);">{`bric-a-brawl · ${roomCode !== null ? roomCode : 'session'}`}</div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-              <span class="type" style="font-size:11px">{photoStatus}</span>
+              {photoStatus.length > 0 && <span class="type" style="font-size:11px;font-weight:700;color:var(--ok);">{photoStatus}</span>}
               {state.sessionChampionName !== null && (
                 <button type="button" class={`btn small${showSessionCard ? ' primary' : ''}`} data-action="session-card" onClick={() => setShowSessionCard((v) => !v)}>
                   Session card
                 </button>
               )}
               <button type="button" class="btn small primary" data-action="copy-photo" onClick={() => void copyPhoto()}>Copy photo</button>
-              <button type="button" class="btn small" data-action="save-photo" onClick={savePhoto}>Save photo</button>
+              <button type="button" class="btn small" data-action="save-photo" onClick={savePhoto}>Save</button>
             </div>
           </div>
         </div>
-        <div class="stamp results-stamp">Sold</div>
       </div>
       <div>
         <table class="results-table">
@@ -396,7 +576,7 @@ function ResultsScreen({ state, roomCode, photoUrl, photoBlob, sessionCardUrl, s
           <tbody>{state.rows.map((row) => (
             <tr key={row.slot}>
               <td class="n">{ord(row.place)}</td><td><Disc slot={row.slot} colourIndex={row.colourIndex} /></td>
-              <td><b>{row.name}</b><div class="sub">{`${getFighterSpec(row.fighterId).name} · ${row.note}`}</div><div class="sub">{row.appraisalLine}</div></td>
+              <td><b>{row.name}</b><div class="sub">{`${getFighterSpec(row.fighterId).name} · ${row.note}`}</div></td>
               <td class="n">{row.kos}</td><td class="n">{row.falls}</td><td class="n">{`${Math.round(row.dealtDamage)}%`}</td>
               <td class="wins-pips"><Pips count={row.wins} total={winsGoal} /></td>
             </tr>
@@ -416,29 +596,108 @@ function ResultsScreen({ state, roomCode, photoUrl, photoBlob, sessionCardUrl, s
 }
 
 export interface AppViewProps {
-  readonly screen: ScreenId; readonly titleRoomCode: string; readonly settingsOpen: boolean; readonly settingsState: SettingsViewState;
-  readonly perfReport: PerfReport | null; readonly lobbyState: LobbyRenderState | null; readonly hudState: HudRenderState | null;
-  readonly errorState: ConnectionErrorState | null; readonly resultsState: ResultsRenderState | null;
-  readonly photoUrl: string | null; readonly photoBlob: Blob | null;
-  readonly sessionCardUrl: string | null; readonly sessionCardBlob: Blob | null;
+  readonly screen: ScreenId;
+  readonly titleRoomCode: string;
+  readonly settingsOpen: boolean;
+  readonly guideOpen: boolean;
+  readonly touchControlsActive: boolean;
+  readonly isTouchDevice: boolean;
+  readonly settingsState: SettingsViewState;
+  readonly perfReport: PerfReport | null;
+  readonly lobbyState: LobbyRenderState | null;
+  readonly hudState: HudRenderState | null;
+  readonly errorState: ConnectionErrorState | null;
+  readonly resultsState: ResultsRenderState | null;
+  readonly photoUrl: string | null;
+  readonly photoBlob: Blob | null;
+  readonly sessionCardUrl: string | null;
+  readonly sessionCardBlob: Blob | null;
   readonly callbacks: UiCallbacks;
-  readonly onOpenSettings: () => void; readonly onCloseSettings: () => void; readonly onSetScreen: (s: ScreenId) => void;
+  readonly onOpenSettings: () => void;
+  readonly onCloseSettings: () => void;
+  readonly onOpenGuide: () => void;
+  readonly onCloseGuide: () => void;
+  readonly onSetScreen: (s: ScreenId) => void;
+  readonly onTouchStick: (dir: InputDir, isTilt: boolean) => void;
+  readonly onTouchBit: (bit: InputBit, active: boolean) => void;
+  readonly onTouchClear: () => void;
 }
 
 export function AppView(p: AppViewProps) {
   const s = p.screen;
+  const isPlayableScreen = s === ScreenId.Lobby || s === ScreenId.Hud;
+  const showTouch = p.touchControlsActive && isPlayableScreen && !p.settingsOpen && !p.guideOpen;
+  const localHudFighter = p.hudState?.fighters.find((f) => f.isLocal);
+  const hasGadget = localHudFighter !== undefined && localHudFighter.heldGadget !== GadgetId.None;
+  const isHost = p.lobbyState === null || p.lobbyState.roster.hostId === p.lobbyState.selfPeerId;
+
   return (
     <>
-      {s === ScreenId.Title && <TitleScreen roomCode={p.titleRoomCode} callbacks={p.callbacks} onOpenSettings={p.onOpenSettings} />}
-      {(s === ScreenId.Lobby || s === ScreenId.CharSelect) && p.lobbyState !== null && <LobbyScreen state={p.lobbyState} showCatalogue={s === ScreenId.CharSelect} callbacks={p.callbacks} onSetScreen={p.onSetScreen} onOpenSettings={p.onOpenSettings} />}
-      <HudLayer visible={s === ScreenId.Hud} state={p.hudState} />
+      {s === ScreenId.Title && (
+        <TitleScreen
+          roomCode={p.titleRoomCode}
+          muted={p.settingsState.muted}
+          callbacks={p.callbacks}
+          onOpenGuide={p.onOpenGuide}
+          onOpenSettings={p.onOpenSettings}
+        />
+      )}
+      {(s === ScreenId.Lobby || s === ScreenId.CharSelect) && p.lobbyState !== null && (
+        <LobbyScreen
+          state={p.lobbyState}
+          showCatalogue={s === ScreenId.CharSelect}
+          muted={p.settingsState.muted}
+          touchActive={showTouch}
+          callbacks={p.callbacks}
+          onSetScreen={p.onSetScreen}
+          onOpenGuide={p.onOpenGuide}
+          onOpenSettings={p.onOpenSettings}
+        />
+      )}
+      <HudLayer
+        visible={s === ScreenId.Hud}
+        state={p.hudState}
+        muted={p.settingsState.muted}
+        touchActive={showTouch}
+        onToggleMute={() => p.callbacks.onChangeMuted(!p.settingsState.muted)}
+        onOpenGuide={p.onOpenGuide}
+        onOpenSettings={p.onOpenSettings}
+      />
       {s === ScreenId.ConnectionError && p.errorState !== null && <ConnectionErrorScreen state={p.errorState} callbacks={p.callbacks} />}
       {s === ScreenId.Results && p.resultsState !== null && (
-        <ResultsScreen state={p.resultsState} roomCode={p.lobbyState !== null ? p.lobbyState.roomCode : null}
-          photoUrl={p.photoUrl} photoBlob={p.photoBlob} sessionCardUrl={p.sessionCardUrl} sessionCardBlob={p.sessionCardBlob}
-          callbacks={p.callbacks} />
+        <ResultsScreen
+          state={p.resultsState}
+          roomCode={p.lobbyState !== null ? p.lobbyState.roomCode : null}
+          photoUrl={p.photoUrl}
+          photoBlob={p.photoBlob}
+          sessionCardUrl={p.sessionCardUrl}
+          sessionCardBlob={p.sessionCardBlob}
+          callbacks={p.callbacks}
+        />
       )}
-      <SettingsModal open={p.settingsOpen} state={p.settingsState} perfReport={p.perfReport} callbacks={p.callbacks} onClose={p.onCloseSettings} />
+      <TouchControls
+        visible={showTouch}
+        hasGadget={hasGadget}
+        onStick={p.onTouchStick}
+        onBit={p.onTouchBit}
+        onClear={p.onTouchClear}
+      />
+      <HowToPlayModal
+        open={p.guideOpen}
+        isTouchDevice={p.isTouchDevice}
+        keyBindings={p.settingsState.keyBindings}
+        onClose={p.onCloseGuide}
+      />
+      <SettingsModal
+        open={p.settingsOpen}
+        inMatch={s === ScreenId.Hud}
+        isHost={isHost}
+        state={p.settingsState}
+        perfReport={p.perfReport}
+        callbacks={p.callbacks}
+        onOpenGuide={p.onOpenGuide}
+        onClose={p.onCloseSettings}
+      />
     </>
   );
 }
