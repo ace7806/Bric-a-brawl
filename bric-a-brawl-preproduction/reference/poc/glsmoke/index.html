@@ -1,0 +1,22 @@
+<!doctype html><html><body style="margin:0"><canvas id="c"></canvas>
+<script type="importmap">{"imports":{"three":"/node_modules/three/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const W=+new URLSearchParams(location.search).get('w')||960, H=Math.round(W*9/16);
+const canvas=document.getElementById('c'); const renderer=new THREE.WebGLRenderer({canvas,antialias:false}); renderer.setSize(W,H,false);
+const gl=renderer.getContext(); const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0xe9e2d3);
+const cam=new THREE.PerspectiveCamera(30,W/H,0.1,300); cam.position.set(0,4,46); cam.lookAt(0,2,0);
+// matcap from a canvas gradient
+const mc=document.createElement('canvas'); mc.width=mc.height=128; const g=mc.getContext('2d'); const gr=g.createRadialGradient(44,40,4,64,64,70); gr.addColorStop(0,'#fff'); gr.addColorStop(0.3,'#d8d2c6'); gr.addColorStop(1,'#5a5248'); g.fillStyle=gr; g.fillRect(0,0,128,128);
+const mat=new THREE.MeshMatcapMaterial({matcap:new THREE.CanvasTexture(mc), vertexColors:false, color:0x9dbfa6});
+let tris=0;
+for(let i=0;i<8;i++){ const geo=new THREE.SphereGeometry(0.8,48,42); const m=new THREE.Mesh(geo,mat.clone()); m.material.color.setHSL(i/8,0.6,0.5); m.position.set(-10.5+i*3,1.2,0); m.scale.y=1.3; scene.add(m); tris+=geo.index.count/3; }
+for(let i=0;i<20;i++){ const geo=new THREE.DodecahedronGeometry(0.9,3); const m=new THREE.Mesh(geo,mat); m.position.set(-13+i*1.36,-0.7,0); m.scale.set(0.8,1.2,2.5); scene.add(m); tris+=geo.attributes.position.count/3; }
+const sg=new THREE.TetrahedronGeometry(0.12); const inst=new THREE.InstancedMesh(sg,mat,300); const d=new THREE.Object3D();
+for(let i=0;i<300;i++){ d.position.set(Math.random()*30-15,Math.random()*10,Math.random()*4-2); d.rotation.set(Math.random()*6,Math.random()*6,0); d.updateMatrix(); inst.setMatrixAt(i,d.matrix);} scene.add(inst); tris+=300*4;
+const px=new Uint8Array(4); const times=[]; let n=0;
+function frame(){ const a=performance.now(); scene.rotation.y=Math.sin(n/30)*0.05; renderer.render(scene,cam); gl.readPixels(0,0,1,1,gl.RGBA,gl.UNSIGNED_BYTE,px); times.push(performance.now()-a);
+  if(++n<90) requestAnimationFrame(frame); else { const t=times.slice(20).sort((x,y)=>x-y); window.__result={w:W,h:H,tris:Math.round(tris),calls:renderer.info.render.calls,renderer:dbg?gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL):'?',meanMs:+(t.reduce((x,y)=>x+y,0)/t.length).toFixed(1),p95Ms:+t[Math.floor(t.length*0.95)].toFixed(1)}; } }
+requestAnimationFrame(frame);
+</script></body></html>

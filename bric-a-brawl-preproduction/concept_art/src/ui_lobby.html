@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset='utf-8'><title>ui_lobby</title><link rel='stylesheet' href='base.css'><style>
+.card { position:absolute; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; box-shadow: 0 3px 0 var(--ink), 0 12px 24px rgba(43,38,35,.22); }
+.row { display:grid; grid-template-columns: 30px 1fr auto auto; gap: 10px; align-items:center; padding: 7px 0; border-top: 1px solid rgba(43,38,35,.25); }
+.row:first-of-type { border-top: 0; } .row .nm { font-weight:600; } .row .sub { font-family: var(--type); font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.bars { display:inline-flex; gap:2px; align-items:flex-end; height:14px; } .bars i { width:4px; background: var(--ok); display:block; border-radius:1px; } .bars i.off { background: rgba(43,38,35,.2); } .bars.warn i:not(.off) { background: var(--warn); }
+.chip { display:inline-block; font-family: var(--type); font-size: 12px; border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 12px 2px; background:#fff; }
+.chip.on { background: var(--ink); color: #fff; }
+</style></head><body class='' style='width:1280px;height:720px'>
+<img src="img/lobby_saucer.png" style="position:absolute;inset:0;width:1280px;height:720px">
+<div class="card paper" style="left:24px;top:22px;padding:12px 16px 14px;width:400px">
+  <div class="caps">Room</div>
+  <div class="display" style="font-size:34px;color:var(--cobalt);margin:2px 0 10px">chipped-gravy-boat</div>
+  <div style="display:flex;gap:10px;align-items:center"><div class="btn small primary" style="white-space:nowrap">Copy invite</div><span class="type" style="font-size:12px;color:var(--ok);font-weight:700">Copied. Paste it in Discord.</span></div>
+</div>
+<div class="card paper" style="right:24px;top:22px;width:372px;padding:12px 16px 8px">
+  <div style="display:flex;justify-content:space-between;align-items:baseline"><div class="caps">Lots in the room</div><div class="caps">5 of 8</div></div>
+  <hr class="rule" style="margin:6px 0 2px">
+  <div class='row'><span class='disc' style='background:var(--p1)'>1</span><div><div class='nm'>Slightly Chipped Gravy Boat</div><div class='sub'>Earl &nbsp;·&nbsp; host</div></div><div class='type' style='font-size:12px;color:var(--ink-soft)'>you</div><div style='display:flex;gap:8px;align-items:center'><span class='bars '><i style='height:4px' class=''></i><i style='height:7px' class=''></i><i style='height:10px' class=''></i><i style='height:13px' class=''></i></span><span class='type' style='font-size:12px;width:78px'>on platter</span></div></div>
+  <div class='row'><span class='disc' style='background:var(--p2)'>2</span><div><div class='nm'>Suspicious Tureen</div><div class='sub'>Grog</div></div><div class='type' style='font-size:12px;color:var(--ink-soft)'>31 ms</div><div style='display:flex;gap:8px;align-items:center'><span class='bars '><i style='height:4px' class=''></i><i style='height:7px' class=''></i><i style='height:10px' class=''></i><i style='height:13px' class=''></i></span><span class='type' style='font-size:12px;width:78px'>on platter</span></div></div>
+  <div class='row'><span class='disc' style='background:var(--p3)'>3</span><div><div class='nm'>Unsigned Vase</div><div class='sub'>Nesta</div></div><div class='type' style='font-size:12px;color:var(--ink-soft)'>44 ms</div><div style='display:flex;gap:8px;align-items:center'><span class='bars '><i style='height:4px' class=''></i><i style='height:7px' class=''></i><i style='height:10px' class=''></i><i style='height:13px' class='off'></i></span><span class='type' style='font-size:12px;width:78px'>on platter</span></div></div>
+  <div class='row'><span class='disc' style='background:var(--p4)'>4</span><div><div class='nm'>Property of a Gentleman</div><div class='sub'>Moss</div></div><div class='type' style='font-size:12px;color:var(--ink-soft)'>118 ms</div><div style='display:flex;gap:8px;align-items:center'><span class='bars warn'><i style='height:4px' class=''></i><i style='height:7px' class=''></i><i style='height:10px' class='off'></i><i style='height:13px' class='off'></i></span><span class='type' style='font-size:12px;width:78px'>wandering</span></div></div>
+  <div class='row'><span class='disc' style='background:var(--p7)'>7</span><div><div class='nm'>Three Legs, One Repaired</div><div class='sub'>Earl</div></div><div class='type' style='font-size:12px;color:var(--ink-soft)'>...</div><div style='display:flex;gap:8px;align-items:center'><span class='bars '><i style='height:4px' class='off'></i><i style='height:7px' class='off'></i><i style='height:10px' class='off'></i><i style='height:13px' class='off'></i></span><span class='type' style='font-size:12px;width:78px'>connecting</span></div></div>
+  <div class="row" style="grid-template-columns:1fr auto"><span class="type" style="font-size:12px;color:var(--ink-soft)">Fewer than four? Add a bot.</span><span class="chip">+ bot</span></div>
+</div>
+<div class="card paper" style="left:50%;transform:translateX(-50%);bottom:26px;padding:12px 26px 14px;text-align:center;width:640px">
+  <div class="display" style="font-size:30px">Everyone on the platter to start</div>
+  <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;align-items:center">
+    <span class="disc" style="background:var(--p1)">1</span><span class="disc" style="background:var(--p2)">2</span><span class="disc" style="background:var(--p3)">3</span>
+    <span class="disc" style="background:transparent;border:2px dashed var(--p4);color:var(--p4);box-shadow:none">4</span><span class="disc" style="background:transparent;border:2px dashed var(--p7);color:var(--p7);box-shadow:none">7</span>
+    <span class="type" style="font-size:13px;margin-left:8px;color:var(--ink-soft)">3 of 5 &nbsp;·&nbsp; starts 3 s after the last one steps on</span></div>
+</div>
+<div style="position:absolute;left:24px;bottom:26px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+  <span class="chip on">Free-for-all</span><span class="chip">Teams</span><span class="chip">3 stocks</span><span class="chip">Fragile: off</span><span class="chip">First arena: The Willow Plate</span></div>
+<div class="card paper type" style="right:24px;bottom:26px;padding:9px 12px;font-size:12px;line-height:1.9">
+  <span class="key">E</span> at the stand: the Catalogue (change fighter)<br><span class="key">T</span> taunt &nbsp; <span class="key">Tab</span> frame data &nbsp; <span class="key">Esc</span> settings</div>
+</body></html>

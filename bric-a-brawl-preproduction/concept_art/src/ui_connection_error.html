@@ -1,0 +1,28 @@
+<!doctype html><html><head><meta charset='utf-8'><title>ui_connection_error</title><link rel='stylesheet' href='base.css'><style>
+.card { position:absolute; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; box-shadow: 0 3px 0 var(--ink), 0 12px 24px rgba(43,38,35,.22); }
+.row { display:grid; grid-template-columns: 30px 1fr auto auto; gap: 10px; align-items:center; padding: 7px 0; border-top: 1px solid rgba(43,38,35,.25); }
+.row:first-of-type { border-top: 0; } .row .nm { font-weight:600; } .row .sub { font-family: var(--type); font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.bars { display:inline-flex; gap:2px; align-items:flex-end; height:14px; } .bars i { width:4px; background: var(--ok); display:block; border-radius:1px; } .bars i.off { background: rgba(43,38,35,.2); } .bars.warn i:not(.off) { background: var(--warn); }
+.chip { display:inline-block; font-family: var(--type); font-size: 12px; border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 12px 2px; background:#fff; }
+.chip.on { background: var(--ink); color: #fff; }
+.node { position:absolute; display:flex; flex-direction:column; align-items:center; gap:3px; width:120px; margin-left:-60px; margin-top:-16px; text-align:center; } .node .disc { width:34px; height:34px; font-size:17px; } .node span.l { font-family: var(--type); font-size: 10.5px; line-height:1.15; }</style></head><body class='paper' style='width:1280px;height:720px'>
+<div style="position:absolute;left:64px;top:46px;width:600px">
+  <div class="caps">Room chipped-gravy-boat &nbsp;·&nbsp; you are Lot 1</div>
+  <div class="display" style="font-size:62px;margin:6px 0 14px">You and the host can't shake hands.</div>
+  <div style="font-size:18px;line-height:1.45">Your network and the host's network both refuse direct connections, so the two of you can't reach each other. Nobody did anything wrong, and this game has no relay server to go through.</div>
+  <div style="margin-top:24px;border:2px solid var(--ink);border-radius:12px;padding:16px 18px;background:#fff;box-shadow:0 4px 0 var(--ink)">
+    <div class="caps" style="color:var(--ok)">Quickest fix</div>
+    <div style="font-size:18px;margin:4px 0 12px"><b>Unsigned Vase</b> can reach everyone in the room, including you. If they host, you're in.</div>
+    <div style="display:flex;gap:12px"><div class="btn primary">Ask Unsigned Vase to host</div><div class="btn">Try again</div></div></div>
+  <div style="margin-top:22px"><div class="caps">If that doesn't work, from most to least likely</div>
+    <ol style="margin:6px 0 0 20px;font-size:15px;line-height:1.6"><li>Turn off your VPN and reload.</li><li>Office, university and hotel wifi usually block this. Try your phone's hotspot.</li><li>Ask someone on home broadband to open the room.</li></ol></div>
+</div>
+<div class="card paper" style="right:56px;top:60px;width:500px;height:400px;padding:14px 16px">
+  <div style="display:flex;justify-content:space-between"><div class="caps">Who can reach whom</div><div class="caps"><span style="color:var(--stamp)">· · ·</span> blocked</div></div>
+  <div style="position:relative;width:500px;height:360px"><svg width="500" height="360" style="position:absolute;left:0;top:0"><line x1='250' y1='52' x2='381' y2='147' stroke='#B5432E' stroke-width='3' stroke-dasharray="3 8"/><line x1='250' y1='52' x2='331' y2='302' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='250' y1='52' x2='169' y2='302' stroke='#B5432E' stroke-width='3' stroke-dasharray="3 8"/><line x1='250' y1='52' x2='119' y2='147' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='381' y1='147' x2='331' y2='302' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='381' y1='147' x2='169' y2='302' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='381' y1='147' x2='119' y2='147' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='331' y1='302' x2='169' y2='302' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='331' y1='302' x2='119' y2='147' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/><line x1='169' y1='302' x2='119' y2='147' stroke='#2B2623' stroke-width='1.6' opacity="0.45"/></svg><div class='node' style='left:250px;top:52px'><span class='disc' style='background:var(--p1)'>1</span><span class='l'>You</span></div><div class='node' style='left:381px;top:147px'><span class='disc' style='background:var(--p2)'>2</span><span class='l'>Suspicious Tureen<br>(host)</span></div><div class='node' style='left:331px;top:302px'><span class='disc' style='background:var(--p3)'>3</span><span class='l'>Unsigned Vase</span></div><div class='node' style='left:169px;top:302px'><span class='disc' style='background:var(--p4)'>4</span><span class='l'>Gentleman</span></div><div class='node' style='left:119px;top:147px'><span class='disc' style='background:var(--p7)'>7</span><span class='l'>Three Legs</span></div></div>
+</div>
+<div class="card paper type" style="right:56px;top:482px;width:500px;padding:12px 16px;font-size:12px;line-height:1.6">
+  <div style="display:flex;justify-content:space-between;align-items:center"><div class="caps">For whoever is helping you</div><span class="chip">Copy diagnostics</span></div>
+  BB-ICE-FAILED &nbsp;·&nbsp; build 0.1.0 &nbsp;·&nbsp; protocol 1<br>relays 4 of 5 reached &nbsp;·&nbsp; STUN answered &nbsp;·&nbsp; candidates: host, srflx (no relay)<br>peers 3 of 4 direct &nbsp;·&nbsp; turnConfigured: false</div>
+<div class="caps" style="position:absolute;left:64px;bottom:28px">Roughly one connection in eight fails like this without a relay. Adding one later is a single config entry.</div>
+</body></html>

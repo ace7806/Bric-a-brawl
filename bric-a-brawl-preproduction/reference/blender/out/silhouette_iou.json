@@ -1,0 +1,14 @@
+{
+ "gate": "side view, each normalised to 64 px tall and centred; limit 0.60",
+ "before_redesign": {
+  "earl-nesta": 0.63
+ },
+ "after": {
+  "earl-grog": 0.58,
+  "earl-nesta": 0.54,
+  "earl-moss": 0.26,
+  "grog-nesta": 0.45,
+  "grog-moss": 0.26,
+  "nesta-moss": 0.15
+ }
+}

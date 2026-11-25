@@ -1,0 +1,44 @@
+/* BRIC-A-BRAWL UI style: an auction catalogue. Paper, ink, one blue, one red stamp, a little gold. */
+@font-face { font-family: "Fraunces"; src: url("fonts/fraunces-latin-full-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; }
+@font-face { font-family: "Fraunces"; src: url("fonts/fraunces-latin-full-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; }
+@font-face { font-family: "Instrument Sans"; src: url("fonts/instrument-sans-latin-wght-normal.woff2") format("woff2"); font-weight: 400 700; }
+@font-face { font-family: "Courier Prime"; src: url("fonts/courier-prime-latin-400-normal.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "Courier Prime"; src: url("fonts/courier-prime-latin-700-normal.woff2") format("woff2"); font-weight: 700; }
+:root {
+  --paper: #F3EDE2; --paper-shade: #E6DCCB; --ink: #2B2623; --ink-soft: #6B625A; --cobalt: #24459A; --stamp: #B5432E; --gilt: #C8A24A; --tag: #E9D9B8; --ok: #2F8F7A; --warn: #E3A72F;
+  --p1: #24459A; --p2: #A3312B; --p3: #E3A72F; --p4: #2F8F7A; --p5: #E36F36; --p6: #6A3F78; --p7: #DA7F98; --p8: #A9B544;
+  --display: "Fraunces", Georgia, serif; --text: "Instrument Sans", system-ui, sans-serif; --type: "Courier Prime", "Courier New", monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { background: var(--paper); color: var(--ink); font-family: var(--text); font-size: 15px; line-height: 1.35; -webkit-font-smoothing: antialiased; position: relative; }
+.paper { background-color: var(--paper); background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.17  0 0 0 0 0.15  0 0 0 0 0.13  0 0 0 0.07 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>"); }
+.display { font-family: var(--display); font-weight: 900; font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144; letter-spacing: -0.02em; line-height: 0.95; }
+.serif { font-family: var(--display); font-variation-settings: "SOFT" 80, "opsz" 24; }
+.type { font-family: var(--type); letter-spacing: 0.02em; }
+.caps { font-family: var(--type); text-transform: uppercase; letter-spacing: 0.12em; font-size: 11px; color: var(--ink-soft); }
+.rule { border: 0; border-top: 1px solid var(--ink); opacity: .55; }
+.rule2 { border: 0; border-top: 3px double var(--ink); opacity: .7; }
+.btn { display: inline-flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 700; font-variation-settings: "SOFT" 100, "opsz" 30; font-size: 22px; padding: 12px 26px 13px; border-radius: 999px; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); box-shadow: 0 3px 0 var(--ink); }
+.btn.primary { background: var(--cobalt); color: #fff; border-color: #162a63; box-shadow: 0 3px 0 #162a63; }
+.btn.small { font-size: 15px; padding: 7px 16px 8px; box-shadow: 0 2px 0 var(--ink); }
+.key { display: inline-block; font-family: var(--type); font-weight: 700; font-size: 12px; border: 1.5px solid var(--ink); border-bottom-width: 3px; border-radius: 5px; padding: 1px 6px 0; background: #fff; margin-right: 4px; }
+.stamp { font-family: var(--display); font-weight: 900; font-variation-settings: "SOFT" 0, "WONK" 0, "opsz" 144; color: var(--stamp); border: 5px solid var(--stamp); border-radius: 10px; padding: 2px 18px 6px; letter-spacing: 0.06em; text-transform: uppercase; transform: rotate(-9deg); display: inline-block; opacity: .9; mix-blend-mode: multiply; }
+.disc { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; font-family: var(--type); font-weight: 700; font-size: 14px; box-shadow: inset 0 -3px 0 rgba(0,0,0,.22), inset 0 2px 0 rgba(255,255,255,.35); flex: none; }
+.backstamp { width: 132px; height: 132px; }
+img { display: block; }
+.shadowed { box-shadow: 0 10px 30px rgba(43,38,35,.28), 0 2px 0 rgba(43,38,35,.5); }
+/* lot tag: the HUD unit */
+.tag { position: relative; width: 168px; height: 76px; background: var(--tag); border: 1.5px solid rgba(43,38,35,.75); border-radius: 6px 14px 14px 6px; padding: 7px 10px 6px 12px; box-shadow: 0 3px 0 rgba(43,38,35,.6), 0 8px 14px rgba(43,38,35,.25); display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto 1fr auto; column-gap: 6px; }
+.tag::before { content: ""; position: absolute; left: -7px; top: 31px; width: 11px; height: 11px; border-radius: 50%; background: var(--paper); border: 1.5px solid rgba(43,38,35,.75); }
+.tag .who { grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; font-family: var(--type); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; overflow: hidden; }
+.tag .who .disc { width: 18px; height: 18px; font-size: 11px; }
+.tag .pct { font-family: var(--display); font-weight: 900; font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144; font-size: 36px; line-height: .9; letter-spacing: -0.03em; align-self: end; }
+.tag .pct small { font-size: 16px; margin-left: 1px; }
+.tag .side { align-self: end; justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.tag .stocks { display: flex; gap: 3px; } .tag .stocks i { width: 9px; height: 12px; border-radius: 5px 5px 3px 3px; display: block; border: 1px solid rgba(43,38,35,.7); }
+.tag .stocks i.lost { background: transparent !important; opacity: .45; }
+.tag .gad { width: 34px; height: 34px; border-radius: 8px; background: #fff; border: 1.5px solid rgba(43,38,35,.75); display: flex; align-items: center; justify-content: center; position: absolute; right: 8px; top: -20px; box-shadow: 0 2px 0 rgba(43,38,35,.6); }
+.tag .gad img { width: 30px; height: 30px; } .tag .gad b { position: absolute; right: -5px; bottom: -6px; font-family: var(--type); font-size: 10px; background: var(--ink); color: #fff; border-radius: 6px; padding: 0 4px; }
+.tag .gilt { grid-column: 1 / 3; height: 5px; border-radius: 3px; background: rgba(43,38,35,.16); margin-top: 4px; overflow: hidden; } .tag .gilt i { display: block; height: 100%; background: linear-gradient(90deg, #8A6A22, #E7CF86 60%, #C8A24A); }
+.tag.danger .pct { color: var(--stamp); } .tag.hot { transform: rotate(-3deg) translateY(-4px); }

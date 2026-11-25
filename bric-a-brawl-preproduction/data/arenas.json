@@ -1,0 +1,1681 @@
+[
+ {
+  "id": "willow",
+  "name": "The Willow Plate",
+  "blurb": "A blue-and-white platter the size of a tennis court. The starter arena: flat, wide, shrinks from the outside in.",
+  "blastZone": {
+   "left": -25,
+   "right": 25,
+   "top": 19,
+   "bottom": -12
+  },
+  "cameraBounds": {
+   "minX": -21,
+   "maxX": 21,
+   "minY": -6,
+   "maxY": 15
+  },
+  "spawns": [
+   [
+    -9,
+    0.6
+   ],
+   [
+    9,
+    0.6
+   ],
+   [
+    -5,
+    0.1
+   ],
+   [
+    5,
+    0.1
+   ],
+   [
+    -1.2,
+    0.1
+   ],
+   [
+    1.2,
+    0.1
+   ],
+   [
+    -7,
+    0.3
+   ],
+   [
+    7,
+    0.3
+   ]
+  ],
+  "chunks": [
+   {
+    "id": "W1",
+    "group": "rim",
+    "hp": 60,
+    "poly": [
+     [
+      -13.0,
+      0.5
+     ],
+     [
+      -10.833,
+      0.024
+     ],
+     [
+      -11.007,
+      -2.512
+     ],
+     [
+      -12.133,
+      -2.816
+     ],
+     [
+      -12.827,
+      -1.309
+     ]
+    ]
+   },
+   {
+    "id": "W2",
+    "group": "outer",
+    "hp": 75,
+    "poly": [
+     [
+      -10.833,
+      0.024
+     ],
+     [
+      -8.667,
+      0.0
+     ],
+     [
+      -8.84,
+      -2.902
+     ],
+     [
+      -9.533,
+      -3.25
+     ],
+     [
+      -10.66,
+      -2.512
+     ]
+    ]
+   },
+   {
+    "id": "W3",
+    "group": "mid",
+    "hp": 90,
+    "poly": [
+     [
+      -8.667,
+      0.0
+     ],
+     [
+      -6.5,
+      0.0
+     ],
+     [
+      -6.673,
+      -3.136
+     ],
+     [
+      -7.8,
+      -3.513
+     ],
+     [
+      -8.493,
+      -2.902
+     ]
+    ]
+   },
+   {
+    "id": "W4",
+    "group": "inner",
+    "hp": 105,
+    "poly": [
+     [
+      -6.5,
+      0.0
+     ],
+     [
+      -4.333,
+      0.0
+     ],
+     [
+      -4.507,
+      -3.287
+     ],
+     [
+      -5.2,
+      -3.682
+     ],
+     [
+      -6.327,
+      -3.136
+     ]
+    ]
+   },
+   {
+    "id": "W5",
+    "group": "inner",
+    "hp": 105,
+    "poly": [
+     [
+      -4.333,
+      0.0
+     ],
+     [
+      -2.167,
+      0.0
+     ],
+     [
+      -2.34,
+      -3.372
+     ],
+     [
+      -3.467,
+      -3.777
+     ],
+     [
+      -4.16,
+      -3.287
+     ]
+    ]
+   },
+   {
+    "id": "W6",
+    "group": "core",
+    "hp": 130,
+    "poly": [
+     [
+      -2.167,
+      0.0
+     ],
+     [
+      -0.0,
+      0.0
+     ],
+     [
+      -0.173,
+      -3.4
+     ],
+     [
+      -0.867,
+      -3.808
+     ],
+     [
+      -1.993,
+      -3.372
+     ]
+    ]
+   },
+   {
+    "id": "W7",
+    "group": "core",
+    "hp": 130,
+    "poly": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      2.167,
+      0.0
+     ],
+     [
+      1.993,
+      -3.372
+     ],
+     [
+      0.867,
+      -3.808
+     ],
+     [
+      0.173,
+      -3.4
+     ]
+    ]
+   },
+   {
+    "id": "W8",
+    "group": "inner",
+    "hp": 105,
+    "poly": [
+     [
+      2.167,
+      0.0
+     ],
+     [
+      4.333,
+      0.0
+     ],
+     [
+      4.16,
+      -3.287
+     ],
+     [
+      3.467,
+      -3.777
+     ],
+     [
+      2.34,
+      -3.372
+     ]
+    ]
+   },
+   {
+    "id": "W9",
+    "group": "inner",
+    "hp": 105,
+    "poly": [
+     [
+      4.333,
+      0.0
+     ],
+     [
+      6.5,
+      0.0
+     ],
+     [
+      6.327,
+      -3.136
+     ],
+     [
+      5.2,
+      -3.682
+     ],
+     [
+      4.507,
+      -3.287
+     ]
+    ]
+   },
+   {
+    "id": "W10",
+    "group": "mid",
+    "hp": 90,
+    "poly": [
+     [
+      6.5,
+      0.0
+     ],
+     [
+      8.667,
+      0.0
+     ],
+     [
+      8.493,
+      -2.902
+     ],
+     [
+      7.8,
+      -3.513
+     ],
+     [
+      6.673,
+      -3.136
+     ]
+    ]
+   },
+   {
+    "id": "W11",
+    "group": "outer",
+    "hp": 75,
+    "poly": [
+     [
+      8.667,
+      0.0
+     ],
+     [
+      10.833,
+      0.024
+     ],
+     [
+      10.66,
+      -2.512
+     ],
+     [
+      9.533,
+      -3.25
+     ],
+     [
+      8.84,
+      -2.902
+     ]
+    ]
+   },
+   {
+    "id": "W12",
+    "group": "rim",
+    "hp": 60,
+    "poly": [
+     [
+      10.833,
+      0.024
+     ],
+     [
+      13.0,
+      0.5
+     ],
+     [
+      12.827,
+      -1.309
+     ],
+     [
+      12.133,
+      -2.816
+     ],
+     [
+      11.007,
+      -2.512
+     ]
+    ]
+   }
+  ],
+  "platforms": [
+   {
+    "id": "bridge",
+    "kind": "soft",
+    "x0": -3.0,
+    "x1": 3.0,
+    "y": 2.6,
+    "hp": 70,
+    "support": [
+     "W6",
+     "W7"
+    ],
+    "note": "Humpback bridge. Arched: 2.6 at the ends, 3.1 in the middle."
+   },
+   {
+    "id": "eave",
+    "kind": "soft",
+    "x0": -10.4,
+    "x1": -6.6,
+    "y": 3.4,
+    "hp": 60,
+    "support": [
+     "W2",
+     "W3"
+    ],
+    "note": "Pagoda roof eave."
+   },
+   {
+    "id": "bough",
+    "kind": "soft",
+    "x0": 6.6,
+    "x1": 10.4,
+    "y": 3.0,
+    "hp": 60,
+    "support": [
+     "W10",
+     "W11"
+    ],
+    "note": "Willow bough. Sways +-0.15 u, cosmetic only."
+   }
+  ],
+  "hazards": [],
+  "timeline": [
+   {
+    "t": 25,
+    "event": "craze",
+    "ids": [
+     "W1",
+     "W12"
+    ]
+   },
+   {
+    "t": 31,
+    "event": "drop",
+    "ids": [
+     "W1",
+     "W12"
+    ]
+   },
+   {
+    "t": 45,
+    "event": "craze",
+    "ids": [
+     "W2",
+     "W11"
+    ]
+   },
+   {
+    "t": 52,
+    "event": "drop",
+    "ids": [
+     "W2",
+     "W11"
+    ]
+   },
+   {
+    "t": 65,
+    "event": "craze",
+    "ids": [
+     "W3",
+     "W10"
+    ]
+   },
+   {
+    "t": 72,
+    "event": "drop",
+    "ids": [
+     "W3",
+     "W10"
+    ]
+   },
+   {
+    "t": 80,
+    "event": "drop",
+    "ids": [
+     "bridge"
+    ]
+   },
+   {
+    "t": 90,
+    "event": "craze",
+    "ids": [
+     "W4",
+     "W9"
+    ]
+   },
+   {
+    "t": 97,
+    "event": "drop",
+    "ids": [
+     "W4",
+     "W9"
+    ]
+   },
+   {
+    "t": 105,
+    "event": "last_call",
+    "ids": [
+     "W5",
+     "W8"
+    ]
+   },
+   {
+    "t": 112,
+    "event": "drop",
+    "ids": [
+     "W5",
+     "W8"
+    ]
+   },
+   {
+    "t": 120,
+    "event": "sudden_death",
+    "ids": [
+     "W6",
+     "W7"
+    ]
+   },
+   {
+    "t": 130,
+    "event": "sink_one",
+    "ids": [
+     "W6|W7"
+    ]
+   },
+   {
+    "t": 140,
+    "event": "sink",
+    "ids": [
+     "W6",
+     "W7"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "high_tea",
+  "name": "High Tea",
+  "blurb": "A three-tier cake stand. Vertical, cramped, with a teapot that pours across the middle tier. Collapses from the bottom up, ends on a seesaw.",
+  "blastZone": {
+   "left": -24,
+   "right": 24,
+   "top": 24,
+   "bottom": -12
+  },
+  "cameraBounds": {
+   "minX": -19,
+   "maxX": 19,
+   "minY": -6,
+   "maxY": 19
+  },
+  "spawns": [
+   [
+    -8,
+    0.1
+   ],
+   [
+    8,
+    0.1
+   ],
+   [
+    -4.5,
+    4.3
+   ],
+   [
+    4.5,
+    4.3
+   ],
+   [
+    -2,
+    8.1
+   ],
+   [
+    2,
+    8.1
+   ],
+   [
+    -3,
+    0.1
+   ],
+   [
+    3,
+    0.1
+   ]
+  ],
+  "chunks": [
+   {
+    "id": "T1a",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      -10.0,
+      0.0
+     ],
+     [
+      -7.5,
+      0.0
+     ],
+     [
+      -7.7,
+      -0.8
+     ],
+     [
+      -8.75,
+      -0.896
+     ],
+     [
+      -9.8,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1b",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      -7.5,
+      0.0
+     ],
+     [
+      -5.0,
+      0.0
+     ],
+     [
+      -5.2,
+      -0.8
+     ],
+     [
+      -6.25,
+      -0.896
+     ],
+     [
+      -7.3,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1c",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      -5.0,
+      0.0
+     ],
+     [
+      -2.5,
+      0.0
+     ],
+     [
+      -2.7,
+      -0.8
+     ],
+     [
+      -3.75,
+      -0.896
+     ],
+     [
+      -4.8,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1d",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      -2.5,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      -0.2,
+      -0.8
+     ],
+     [
+      -1.25,
+      -0.896
+     ],
+     [
+      -2.3,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1e",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      2.5,
+      0.0
+     ],
+     [
+      2.3,
+      -0.8
+     ],
+     [
+      1.25,
+      -0.896
+     ],
+     [
+      0.2,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1f",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      2.5,
+      0.0
+     ],
+     [
+      5.0,
+      0.0
+     ],
+     [
+      4.8,
+      -0.8
+     ],
+     [
+      3.75,
+      -0.896
+     ],
+     [
+      2.7,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1g",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      5.0,
+      0.0
+     ],
+     [
+      7.5,
+      0.0
+     ],
+     [
+      7.3,
+      -0.8
+     ],
+     [
+      6.25,
+      -0.896
+     ],
+     [
+      5.2,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T1h",
+    "group": "T1",
+    "hp": 80,
+    "oneWay": false,
+    "poly": [
+     [
+      7.5,
+      0.0
+     ],
+     [
+      10.0,
+      0.0
+     ],
+     [
+      9.8,
+      -0.8
+     ],
+     [
+      8.75,
+      -0.896
+     ],
+     [
+      7.7,
+      -0.8
+     ]
+    ]
+   },
+   {
+    "id": "T2a",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      -6.5,
+      4.2
+     ],
+     [
+      -4.333,
+      4.2
+     ],
+     [
+      -4.507,
+      3.6
+     ],
+     [
+      -5.417,
+      3.528
+     ],
+     [
+      -6.327,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T2b",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      -4.333,
+      4.2
+     ],
+     [
+      -2.167,
+      4.2
+     ],
+     [
+      -2.34,
+      3.6
+     ],
+     [
+      -3.25,
+      3.528
+     ],
+     [
+      -4.16,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T2c",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      -2.167,
+      4.2
+     ],
+     [
+      -0.0,
+      4.2
+     ],
+     [
+      -0.173,
+      3.6
+     ],
+     [
+      -1.083,
+      3.528
+     ],
+     [
+      -1.993,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T2d",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      0.0,
+      4.2
+     ],
+     [
+      2.167,
+      4.2
+     ],
+     [
+      1.993,
+      3.6
+     ],
+     [
+      1.083,
+      3.528
+     ],
+     [
+      0.173,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T2e",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      2.167,
+      4.2
+     ],
+     [
+      4.333,
+      4.2
+     ],
+     [
+      4.16,
+      3.6
+     ],
+     [
+      3.25,
+      3.528
+     ],
+     [
+      2.34,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T2f",
+    "group": "T2",
+    "hp": 70,
+    "oneWay": true,
+    "poly": [
+     [
+      4.333,
+      4.2
+     ],
+     [
+      6.5,
+      4.2
+     ],
+     [
+      6.327,
+      3.6
+     ],
+     [
+      5.417,
+      3.528
+     ],
+     [
+      4.507,
+      3.6
+     ]
+    ]
+   },
+   {
+    "id": "T3a",
+    "group": "T3",
+    "hp": 110,
+    "oneWay": true,
+    "poly": [
+     [
+      -3.5,
+      8.0
+     ],
+     [
+      0.0,
+      8.0
+     ],
+     [
+      -0.28,
+      7.4
+     ],
+     [
+      -1.75,
+      7.328
+     ],
+     [
+      -3.22,
+      7.4
+     ]
+    ]
+   },
+   {
+    "id": "T3b",
+    "group": "T3",
+    "hp": 110,
+    "oneWay": true,
+    "poly": [
+     [
+      0.0,
+      8.0
+     ],
+     [
+      3.5,
+      8.0
+     ],
+     [
+      3.22,
+      7.4
+     ],
+     [
+      1.75,
+      7.328
+     ],
+     [
+      0.28,
+      7.4
+     ]
+    ]
+   }
+  ],
+  "platforms": [
+   {
+    "id": "cupL",
+    "kind": "solid_moving",
+    "x0": -13.8,
+    "x1": -11.2,
+    "y": 2.8,
+    "hp": 60,
+    "bob": {
+     "amp": 0.6,
+     "periodSeconds": 6.0
+    },
+    "note": "Teacup. You can stand inside it: the walls are 0.5 u cover."
+   },
+   {
+    "id": "cupR",
+    "kind": "solid_moving",
+    "x0": 11.2,
+    "x1": 13.8,
+    "y": 2.8,
+    "hp": 60,
+    "bob": {
+     "amp": 0.6,
+     "periodSeconds": 6.0,
+     "phase": 0.5
+    },
+    "note": "Teacup."
+   }
+  ],
+  "hazards": [
+   {
+    "id": "pour",
+    "name": "The Pour",
+    "atSeconds": [
+     40,
+     80
+    ],
+    "telegraphSeconds": 1.5,
+    "durationSeconds": 4.0,
+    "column": [
+     2.0,
+     4.0
+    ],
+    "force": {
+     "down": 30.0,
+     "outward": 12.0
+    },
+    "after": {
+     "slipperySeconds": 6.0,
+     "tractionMult": 0.3
+    },
+    "damage": 0,
+    "note": "The background teapot whistles, tips and pours a column of tea from the top of the screen to tier 1. Shoves, never hurts."
+   }
+  ],
+  "timeline": [
+   {
+    "t": 25,
+    "event": "craze",
+    "ids": [
+     "T1a",
+     "T1h"
+    ]
+   },
+   {
+    "t": 31,
+    "event": "drop",
+    "ids": [
+     "T1a",
+     "T1h"
+    ]
+   },
+   {
+    "t": 40,
+    "event": "hazard",
+    "ids": [
+     "pour"
+    ]
+   },
+   {
+    "t": 45,
+    "event": "craze",
+    "ids": [
+     "T1b",
+     "T1g"
+    ]
+   },
+   {
+    "t": 52,
+    "event": "drop",
+    "ids": [
+     "T1b",
+     "T1g"
+    ]
+   },
+   {
+    "t": 60,
+    "event": "craze",
+    "ids": [
+     "cupL",
+     "cupR"
+    ]
+   },
+   {
+    "t": 66,
+    "event": "drop",
+    "ids": [
+     "cupL"
+    ]
+   },
+   {
+    "t": 70,
+    "event": "craze",
+    "ids": [
+     "T1c",
+     "T1f"
+    ]
+   },
+   {
+    "t": 72,
+    "event": "drop",
+    "ids": [
+     "cupR"
+    ]
+   },
+   {
+    "t": 77,
+    "event": "drop",
+    "ids": [
+     "T1c",
+     "T1f"
+    ]
+   },
+   {
+    "t": 80,
+    "event": "hazard",
+    "ids": [
+     "pour"
+    ]
+   },
+   {
+    "t": 85,
+    "event": "stem_snap",
+    "ids": [
+     "T3a",
+     "T3b"
+    ]
+   },
+   {
+    "t": 85,
+    "event": "craze",
+    "ids": [
+     "T2a",
+     "T2f"
+    ]
+   },
+   {
+    "t": 92,
+    "event": "drop",
+    "ids": [
+     "T2a",
+     "T2f"
+    ]
+   },
+   {
+    "t": 100,
+    "event": "craze",
+    "ids": [
+     "T1d",
+     "T1e"
+    ]
+   },
+   {
+    "t": 105,
+    "event": "last_call",
+    "ids": [
+     "T2b",
+     "T2e"
+    ]
+   },
+   {
+    "t": 107,
+    "event": "drop",
+    "ids": [
+     "T1d",
+     "T1e"
+    ]
+   },
+   {
+    "t": 116,
+    "event": "drop",
+    "ids": [
+     "T2b",
+     "T2e"
+    ]
+   },
+   {
+    "t": 120,
+    "event": "sudden_death",
+    "ids": [
+     "T2c",
+     "T2d"
+    ]
+   },
+   {
+    "t": 126,
+    "event": "drop",
+    "ids": [
+     "T2c",
+     "T2d"
+    ]
+   },
+   {
+    "t": 140,
+    "event": "sink",
+    "ids": [
+     "T3a",
+     "T3b"
+    ]
+   }
+  ],
+  "special": {
+   "stemSnap": "At 1:25 tier 3 becomes a seesaw: it tilts toward the heavier side at up to 14 deg (torque = sum of fighter weight x distance from centre), 40 deg/s max."
+  }
+ },
+ {
+  "id": "mended_bowl",
+  "name": "The Mended Bowl",
+  "blurb": "A bowl that was broken once and put back together with gold. The seams show exactly where it will break again. It splits down the middle and a kiln updraft rises through the gap.",
+  "blastZone": {
+   "left": -26,
+   "right": 26,
+   "top": 20,
+   "bottom": -12
+  },
+  "cameraBounds": {
+   "minX": -22,
+   "maxX": 22,
+   "minY": -6,
+   "maxY": 16
+  },
+  "spawns": [
+   [
+    -11.5,
+    3.1
+   ],
+   [
+    11.5,
+    3.1
+   ],
+   [
+    -5,
+    0.1
+   ],
+   [
+    5,
+    0.1
+   ],
+   [
+    -1.5,
+    0.1
+   ],
+   [
+    1.5,
+    0.1
+   ],
+   [
+    -8,
+    0.5
+   ],
+   [
+    8,
+    0.5
+   ]
+  ],
+  "chunks": [
+   {
+    "id": "B1",
+    "group": "lip",
+    "hp": 70,
+    "half": "L",
+    "poly": [
+     [
+      -13.5,
+      3.0
+     ],
+     [
+      -10.0,
+      1.584
+     ],
+     [
+      -10.28,
+      -0.736
+     ],
+     [
+      -11.75,
+      -1.014
+     ],
+     [
+      -13.22,
+      1.376
+     ]
+    ]
+   },
+   {
+    "id": "B2",
+    "group": "wall",
+    "hp": 90,
+    "half": "L",
+    "poly": [
+     [
+      -10.0,
+      1.584
+     ],
+     [
+      -7.0,
+      0.0
+     ],
+     [
+      -7.24,
+      -2.586
+     ],
+     [
+      -8.5,
+      -2.896
+     ],
+     [
+      -9.76,
+      -0.736
+     ]
+    ]
+   },
+   {
+    "id": "B3",
+    "group": "floor",
+    "hp": 105,
+    "half": "L",
+    "poly": [
+     [
+      -7.0,
+      0.0
+     ],
+     [
+      -3.5,
+      0.0
+     ],
+     [
+      -3.78,
+      -2.749
+     ],
+     [
+      -5.25,
+      -3.079
+     ],
+     [
+      -6.72,
+      -2.586
+     ]
+    ]
+   },
+   {
+    "id": "B4",
+    "group": "core",
+    "hp": 130,
+    "half": "L",
+    "poly": [
+     [
+      -3.5,
+      0.0
+     ],
+     [
+      0.0,
+      0.0
+     ],
+     [
+      -0.28,
+      -2.8
+     ],
+     [
+      -1.75,
+      -3.136
+     ],
+     [
+      -3.22,
+      -2.749
+     ]
+    ]
+   },
+   {
+    "id": "B5",
+    "group": "core",
+    "hp": 130,
+    "half": "R",
+    "poly": [
+     [
+      0.0,
+      0.0
+     ],
+     [
+      3.5,
+      0.0
+     ],
+     [
+      3.22,
+      -2.749
+     ],
+     [
+      1.75,
+      -3.136
+     ],
+     [
+      0.28,
+      -2.8
+     ]
+    ]
+   },
+   {
+    "id": "B6",
+    "group": "floor",
+    "hp": 105,
+    "half": "R",
+    "poly": [
+     [
+      3.5,
+      0.0
+     ],
+     [
+      7.0,
+      0.0
+     ],
+     [
+      6.72,
+      -2.586
+     ],
+     [
+      5.25,
+      -3.079
+     ],
+     [
+      3.78,
+      -2.749
+     ]
+    ]
+   },
+   {
+    "id": "B7",
+    "group": "wall",
+    "hp": 90,
+    "half": "R",
+    "poly": [
+     [
+      7.0,
+      0.0
+     ],
+     [
+      10.0,
+      1.584
+     ],
+     [
+      9.76,
+      -0.736
+     ],
+     [
+      8.5,
+      -2.896
+     ],
+     [
+      7.24,
+      -2.586
+     ]
+    ]
+   },
+   {
+    "id": "B8",
+    "group": "lip",
+    "hp": 70,
+    "half": "R",
+    "poly": [
+     [
+      10.0,
+      1.584
+     ],
+     [
+      13.5,
+      3.0
+     ],
+     [
+      13.22,
+      1.376
+     ],
+     [
+      11.75,
+      -1.014
+     ],
+     [
+      10.28,
+      -0.736
+     ]
+    ]
+   }
+  ],
+  "platforms": [
+   {
+    "id": "shardL",
+    "kind": "soft",
+    "x0": -6.5,
+    "x1": -3.5,
+    "y": 4.6,
+    "hp": 60,
+    "attach": "L",
+    "note": "A gold-rimmed shard that never fell. Moves with the left half."
+   },
+   {
+    "id": "shardR",
+    "kind": "soft",
+    "x0": 3.5,
+    "x1": 6.5,
+    "y": 4.6,
+    "hp": 60,
+    "attach": "R",
+    "note": "Moves with the right half."
+   },
+   {
+    "id": "shardTop",
+    "kind": "soft",
+    "x0": -1.75,
+    "x1": 1.75,
+    "y": 7.2,
+    "hp": 60,
+    "attach": null,
+    "note": "Hangs over the seam. Falls when the bowl splits."
+   }
+  ],
+  "hazards": [
+   {
+    "id": "updraft",
+    "name": "Kiln Updraft",
+    "activeWhen": "gap >= 2 u",
+    "column": "the gap between the halves",
+    "gravityMult": 0.45,
+    "maxFallMult": 0.5,
+    "launchedLift": 6.0,
+    "damage": 0,
+    "note": "Hot air from the kiln far below. Fighters and objects fall at half speed inside the gap; launched fighters are carried upward. It makes the chasm a place to fight, and the ceiling a place to die."
+   }
+  ],
+  "timeline": [
+   {
+    "t": 35,
+    "event": "split",
+    "ids": [
+     "B4|B5"
+    ]
+   },
+   {
+    "t": 36,
+    "event": "drop",
+    "ids": [
+     "shardTop"
+    ]
+   },
+   {
+    "t": 55,
+    "event": "craze",
+    "ids": [
+     "B1",
+     "B8"
+    ]
+   },
+   {
+    "t": 62,
+    "event": "drop",
+    "ids": [
+     "B1",
+     "B8"
+    ]
+   },
+   {
+    "t": 75,
+    "event": "tilt",
+    "ids": [
+     "L",
+     "R"
+    ]
+   },
+   {
+    "t": 90,
+    "event": "craze",
+    "ids": [
+     "B2",
+     "B7"
+    ]
+   },
+   {
+    "t": 97,
+    "event": "drop",
+    "ids": [
+     "B2",
+     "B7"
+    ]
+   },
+   {
+    "t": 105,
+    "event": "last_call",
+    "ids": [
+     "B3",
+     "B6"
+    ]
+   },
+   {
+    "t": 112,
+    "event": "drop",
+    "ids": [
+     "B3",
+     "B6",
+     "shardL",
+     "shardR"
+    ]
+   },
+   {
+    "t": 120,
+    "event": "sudden_death",
+    "ids": [
+     "B4",
+     "B5"
+    ]
+   },
+   {
+    "t": 130,
+    "event": "sink_one",
+    "ids": [
+     "B4|B5"
+    ]
+   },
+   {
+    "t": 140,
+    "event": "sink",
+    "ids": [
+     "B4",
+     "B5"
+    ]
+   }
+  ],
+  "special": {
+   "split": "At 0:35 the centre seam fails. Each half becomes one kinematic body and drifts outward at 0.14 u/s until the gap is 8 u (about 0:64).",
+   "tilt": "At 1:15 each half rotates outward about its inner bottom corner at 0.5 deg/s to 12 deg. Loose objects roll off; footing still holds."
+  }
+ }
+]

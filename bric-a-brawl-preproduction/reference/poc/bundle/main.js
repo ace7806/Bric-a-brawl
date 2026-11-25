@@ -1,0 +1,11 @@
+import { WebGLRenderer, Scene, PerspectiveCamera, ShaderMaterial, SkinnedMesh, Skeleton, Bone, InstancedMesh, BufferGeometry, Mesh, AudioListener, Audio, AudioLoader, Clock, Vector3, Color, Fog, WebGLRenderTarget, TextureLoader } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import RAPIER from '@dimforge/rapier2d-deterministic-compat';
+import { joinRoom } from 'trystero';
+import { Packr } from 'msgpackr';
+import { SnapshotInterpolation } from '@geckos.io/snapshot-interpolation';
+const r = new WebGLRenderer(); const s = new Scene(); const c = new PerspectiveCamera();
+const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+window.__keep = [r,s,c,l,ShaderMaterial,SkinnedMesh,Skeleton,Bone,InstancedMesh,BufferGeometry,Mesh,AudioListener,Audio,AudioLoader,Clock,Vector3,Color,Fog,WebGLRenderTarget,TextureLoader,RAPIER,joinRoom,Packr,SnapshotInterpolation];
+RAPIER.init().then(()=>{ const w=new RAPIER.World({x:0,y:-9}); w.step(); });

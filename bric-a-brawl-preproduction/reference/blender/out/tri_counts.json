@@ -1,0 +1,45 @@
+{
+ "earl": {
+  "tris": 5468,
+  "parts": 6
+ },
+ "grog": {
+  "tris": 6220,
+  "parts": 6
+ },
+ "nesta": {
+  "tris": 5120,
+  "parts": 3
+ },
+ "moss": {
+  "tris": 4876,
+  "parts": 7
+ },
+ "gadget_bellows": {
+  "tris": 652
+ },
+ "gadget_plunger": {
+  "tris": 420
+ },
+ "gadget_cork": {
+  "tris": 736
+ },
+ "gadget_pepper": {
+  "tris": 700
+ },
+ "gadget_toaster": {
+  "tris": 244
+ },
+ "gadget_jam": {
+  "tris": 608
+ },
+ "gadget_timer": {
+  "tris": 528
+ },
+ "gadget_hoover": {
+  "tris": 766
+ },
+ "gadget_magnet": {
+  "tris": 228
+ }
+}

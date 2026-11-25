@@ -1,0 +1,187 @@
+{
+ "rules": {
+  "firstSpawnSeconds": 8,
+  "spawnIntervalSeconds": [
+   9,
+   12
+  ],
+  "maxOnStage": {
+   "2-4": 3,
+   "5-8": 5
+  },
+  "despawnSeconds": 20,
+  "parcelDescentSeconds": 2.0,
+  "trailingPlayerBias": 0.6,
+  "holdLimit": 1,
+  "dropOnTumble": true,
+  "emptyThrowDamage": 4.0,
+  "lastCallSpawnMult": 2.0
+ },
+ "gadgets": [
+  {
+   "id": "bellows",
+   "name": "The Bellows",
+   "verb": "push",
+   "tier": "A",
+   "weight": 22,
+   "ammo": 6,
+   "behaviour": "Cone gust, 6 u long, 50 deg wide, fires in the facing direction (aim up/down 45 deg). Instant. 18 f between puffs.",
+   "numbers": {
+    "push": 16.0,
+    "pushAirborneMult": 1.6,
+    "damage": 1.0,
+    "userRecoil": 4.0,
+    "cooldownFrames": 18
+   },
+   "counterplay": "Guard halves the push and keeps your feet planted. Parry sends the gust back at 1.3x. Stay grounded: airborne fighters fly 1.6x further.",
+   "beat": "Three people leaving the island like leaves off a lawn. Also the cheapest recovery in the game: puff downward to hop."
+  },
+  {
+   "id": "plunger",
+   "name": "Plunger-on-a-String",
+   "verb": "pull",
+   "tier": "A",
+   "weight": 16,
+   "ammo": 3,
+   "behaviour": "Fires a plunger 9 u at 22 u/s. Sticks to the first fighter, chunk, rubble or gadget. Press Use again within 3 s to yank: light targets fly to you at 18 u/s; heavier or fixed targets pull YOU to them.",
+   "numbers": {
+    "range": 9.0,
+    "speed": 22.0,
+    "yankSpeed": 18.0,
+    "damage": 3.0,
+    "stickSeconds": 3.0
+   },
+   "counterplay": "Parry it and it sticks to the shooter's face: you get the yank. Any hit on the string cuts it. Grog is too heavy to be yanked: he reels you in instead.",
+   "beat": "Yank a friend toward you, sidestep, watch them sail past and off the far edge."
+  },
+  {
+   "id": "cork",
+   "name": "The Vintage",
+   "verb": "launch",
+   "tier": "A",
+   "weight": 10,
+   "ammo": 1,
+   "behaviour": "Champagne bottle. Hold Use to shake (up to 45 f), release to fire the cork at 34 u/s. The recoil launches the shooter the other way.",
+   "numbers": {
+    "damage": 9.0,
+    "bkb": 24,
+    "kbg": 20,
+    "angle": 35,
+    "recoilMin": 14.0,
+    "recoilMax": 24.0,
+    "shakeFrames": 45
+   },
+   "counterplay": "It is loud and slow: jump or parry (the cork comes back). The shooter is airborne and helpless for 20 f afterwards.",
+   "beat": "The recoil kills the shooter as often as the target. Aim it at the floor to rocket-jump back from the dead."
+  },
+  {
+   "id": "pepper",
+   "name": "Pepper Mill",
+   "verb": "reverse",
+   "tier": "B",
+   "weight": 10,
+   "ammo": 2,
+   "behaviour": "Grinds a pepper cloud 3 u wide, lasting 4 s. Anyone inside (the user too) for 40 f builds a sneeze, then sneezes: launched BACKWARDS from the way they face.",
+   "numbers": {
+    "cloudRadius": 1.5,
+    "cloudSeconds": 4.0,
+    "sneezeBuildFrames": 40,
+    "sneezeLaunch": 18.0,
+    "sneezeAngle": 25,
+    "damage": 2.0
+   },
+   "counterplay": "Leave the cloud, or turn your back to the island centre so the sneeze throws you inward. Bellows and Snort blow the cloud around.",
+   "beat": "Ah... ah... CHOO. An ornament rocketing backwards off the island with a tiny sneeze."
+  },
+  {
+   "id": "toaster",
+   "name": "Pop-Up Toaster",
+   "verb": "launch",
+   "tier": "B",
+   "weight": 10,
+   "ammo": 3,
+   "behaviour": "Place it on the ground. 36 f after anyone (or anything) lands on it: DING, straight up at 26 u/s. Three pops, then it is a throwable brick.",
+   "numbers": {
+    "armFrames": 36,
+    "popSpeed": 26.0,
+    "damage": 4.0,
+    "uses": 3
+   },
+   "counterplay": "It ticks for 36 f: step off. Hit it to knock it away. Jam on top of it stops it firing.",
+   "beat": "The ding. Then somebody who was winning is above the camera."
+  },
+  {
+   "id": "jam",
+   "name": "Jam Jar",
+   "verb": "stick",
+   "tier": "B",
+   "weight": 10,
+   "ammo": 2,
+   "behaviour": "Lob it: it splats into a puddle 3 u wide for 8 s. Fighters in it are rooted (can attack and guard, cannot walk or jump) until they press Jump 3 times or 90 f pass. Rubble and gadgets stick too.",
+   "numbers": {
+    "puddleWidth": 3.0,
+    "puddleSeconds": 8.0,
+    "rootMaxFrames": 90,
+    "mashToEscape": 3,
+    "damage": 2.0
+   },
+   "counterplay": "Mash Jump. Guard still works while stuck. The puddle falls with its chunk.",
+   "beat": "Being glued to a piece of island at the exact moment that piece stops being island."
+  },
+  {
+   "id": "timer",
+   "name": "Egg Timer",
+   "verb": "reverse",
+   "tier": "B",
+   "weight": 8,
+   "ammo": 2,
+   "behaviour": "Press Use: you snap back to where you were 120 f ago, with the damage you have now. Leaves a ticking ghost where you will return to. Usable in hitstun.",
+   "numbers": {
+    "rewindFrames": 120,
+    "invulnFrames": 10
+   },
+   "counterplay": "Everyone can see the ghost: stand on it with a heavy attack ready, or break the chunk under it.",
+   "beat": "Launched, rewound, saved. Or: rewinding onto a chunk that fell off a second ago."
+  },
+  {
+   "id": "hoover",
+   "name": "The Hoover",
+   "verb": "suck and spit",
+   "tier": "C",
+   "weight": 8,
+   "ammo": 2,
+   "behaviour": "Hold Use: suction cone 5 u, pulls fighters at 9 u/s, rubble and gadgets at 16 u/s. A fighter who reaches the nozzle is bagged for up to 90 f, then fired in the aim direction as a living projectile.",
+   "numbers": {
+    "cone": 5.0,
+    "pullFighter": 9.0,
+    "pullObject": 16.0,
+    "bagMaxFrames": 90,
+    "spitSpeed": 28.0,
+    "spitDamage": 8.0,
+    "spitBkb": 16,
+    "spitKbg": 10,
+    "hitByFlyingFriend": 10.0
+   },
+   "counterplay": "Guard resists the pull. Mash inside the bag to cut it to 40 f. The user cannot guard while sucking. Grog cannot be bagged.",
+   "beat": "Firing one friend at another friend."
+  },
+  {
+   "id": "magnet",
+   "name": "Horseshoe Magnet",
+   "verb": "attract and repel",
+   "tier": "C",
+   "weight": 6,
+   "ammo": 3,
+   "behaviour": "Tap Use: for 60 f every loose object within 8 u (rubble, gadgets, shells, bobbers, corks) flies to the holder and orbits. Tap again: all of it fires outward in the aim direction as shrapnel. Fighters are ceramic and do not stick, but their held gadgets are ripped away.",
+   "numbers": {
+    "radius": 8.0,
+    "attractFrames": 60,
+    "shrapnelSpeed": 24.0,
+    "shrapnelDamageEach": 4.0,
+    "maxOrbit": 8
+   },
+   "counterplay": "Useless on a clean stage: deny it rubble. Parry reflects each piece of shrapnel. Hold your gadget out of range or lose it.",
+   "beat": "A cloud of crockery, a held breath, then all of it going one direction."
+  }
+ ]
+}

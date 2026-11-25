@@ -1,0 +1,4 @@
+- Fastest hit: 3 frames. Fastest grab: 6 frames.
+- Safest move on block: Spout Flick at -7. Nothing is plus on block: guard always returns the turn.
+- Earliest ledge KO: 40%. Earliest centre KO: 96%.
+- Moves in the launch roster: 102.

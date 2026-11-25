@@ -1,0 +1,105 @@
+{
+ "neutrals": {
+  "bone": "#F2EEE6",
+  "slip": "#EAE3D2",
+  "bisque": "#D8B596",
+  "terracotta": "#B5633F",
+  "basalt": "#3A322D",
+  "ash": "#8E8478",
+  "ink": "#2B2623"
+ },
+ "players": [
+  {
+   "slot": 1,
+   "name": "Cobalt",
+   "hex": "#24459A",
+   "pattern": "solid band"
+  },
+  {
+   "slot": 2,
+   "name": "Oxblood",
+   "hex": "#A3312B",
+   "pattern": "dots"
+  },
+  {
+   "slot": 3,
+   "name": "Mustard",
+   "hex": "#E3A72F",
+   "pattern": "stripes"
+  },
+  {
+   "slot": 4,
+   "name": "Verdigris",
+   "hex": "#2F8F7A",
+   "pattern": "checks"
+  },
+  {
+   "slot": 5,
+   "name": "Tangerine",
+   "hex": "#E36F36",
+   "pattern": "zigzag"
+  },
+  {
+   "slot": 6,
+   "name": "Aubergine",
+   "hex": "#6A3F78",
+   "pattern": "scallops"
+  },
+  {
+   "slot": 7,
+   "name": "Rose",
+   "hex": "#DA7F98",
+   "pattern": "florets"
+  },
+  {
+   "slot": 8,
+   "name": "Celery",
+   "hex": "#A9B544",
+   "pattern": "crosshatch"
+  }
+ ],
+ "accents": {
+  "gilt": "#C8A24A",
+  "gilt_hi": "#E7CF86",
+  "gilt_lo": "#8A6A22",
+  "cheek": "#E9A39A",
+  "stamp_red": "#B5432E",
+  "delft_ink": "#1E3A8A",
+  "delft_paper": "#F4F1EA"
+ },
+ "world": {
+  "sky_top": "#A9C2BC",
+  "sky_mid": "#E4D3B5",
+  "sky_low": "#D9A886",
+  "cloud": "#EFE7D8",
+  "fog": "#E4D3B5",
+  "clay_foot": "#9C6B55",
+  "willow_glaze": "#EDEAE2",
+  "willow_wash": "#8C9FC6",
+  "willow_line": "#5E78B0",
+  "celadon": "#9DBFA6",
+  "celadon_dk": "#6E9A85",
+  "tea_cream": "#EFE3C8",
+  "tea_rose": "#D9A5A0",
+  "tea": "#C08A4E",
+  "bowl_tenmoku": "#4A372C",
+  "bowl_inner": "#B9CDB8"
+ },
+ "ui": {
+  "paper": "#F3EDE2",
+  "paper_shade": "#E6DCCB",
+  "ink": "#2B2623",
+  "ink_soft": "#6B625A",
+  "cobalt": "#24459A",
+  "stamp": "#B5432E",
+  "gilt": "#C8A24A",
+  "tag": "#E9D9B8",
+  "ok": "#2F8F7A",
+  "warn": "#E3A72F"
+ },
+ "rules": {
+  "worldMaxSaturationHSL": 0.35,
+  "liveryMinSaturationHSL": 0.5,
+  "note": "Saturation belongs to players and gadgets. Fighter bodies use neutrals only, so any livery reads on any fighter."
+ }
+}

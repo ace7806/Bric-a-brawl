@@ -1,0 +1,14 @@
+<!doctype html><html><head><meta charset='utf-8'><title>sheet_silhouettes</title><link rel='stylesheet' href='base.css'><style>
+.hd { position:absolute; left:48px; top:34px; right:48px; display:flex; justify-content:space-between; align-items:flex-end; }
+.view { position:relative; width:300px; height:330px; border:1px solid rgba(43,38,35,.5); border-radius:8px; background: linear-gradient(#EFE6D6, #E7DCC8); overflow:hidden; }
+.view img { position:absolute; left:-15px; top:0; width:330px; height:330px; } .view .lab { position:absolute; left:10px; top:8px; }
+.view .g { position:absolute; left:0; right:0; border-top:1px dashed rgba(36,69,154,.45); } .view .g span { position:absolute; right:6px; top:-13px; font-family:var(--type); font-size:9.5px; color:var(--cobalt); }
+.sil img { filter: brightness(0); } .sil { background:#F7F3EA; }
+.note h4 { font-family: var(--type); font-size: 11px; text-transform: uppercase; letter-spacing: .12em; color: var(--cobalt); margin: 12px 0 3px; font-weight:700; } .note p, .note li { font-size: 13.5px; line-height: 1.38; } .note ul { margin-left: 16px; }
+.kv { display:grid; grid-template-columns: auto auto; gap: 1px 16px; font-family: var(--type); font-size: 12.5px; } .kv b { text-align:right; }
+</style></head><body class='paper' style='width:1600px;height:520px'>
+<div class="hd"><div><div class="caps">Art bible check</div><div class="display" style="font-size:52px">Four shapes: circle, bar, pin, triangle</div></div><div class="caps" style="text-align:right">Automated gate: pairwise overlap (IoU) of side silhouettes at 64 px must stay under 0.60</div></div>
+<div style="position:absolute;left:48px;top:140px;display:flex;gap:30px;align-items:flex-end">
+  <div style='text-align:center'><img src='img/earl_side.png' style='width:330px;height:330px;filter:brightness(0);margin:0 -20px'><div class='caps'>EARL</div></div><div style='text-align:center'><img src='img/grog_side.png' style='width:330px;height:330px;filter:brightness(0);margin:0 -20px'><div class='caps'>GROG</div></div><div style='text-align:center'><img src='img/nesta_side.png' style='width:330px;height:330px;filter:brightness(0);margin:0 -20px'><div class='caps'>NESTA</div></div><div style='text-align:center'><img src='img/moss_side.png' style='width:330px;height:330px;filter:brightness(0);margin:0 -20px'><div class='caps'>MOSS</div></div>
+  <div style="display:flex;gap:2px;align-items:flex-end;padding-bottom:22px"><img src='img/earl_game.png' style='width:64px;height:64px;filter:brightness(0)'><img src='img/grog_game.png' style='width:64px;height:64px;filter:brightness(0)'><img src='img/nesta_game.png' style='width:64px;height:64px;filter:brightness(0)'><img src='img/moss_game.png' style='width:64px;height:64px;filter:brightness(0)'></div>
+</div></body></html>

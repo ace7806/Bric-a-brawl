@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset='utf-8'><title>ui_charselect</title><link rel='stylesheet' href='base.css'><style>
+.card { position:absolute; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; box-shadow: 0 3px 0 var(--ink), 0 12px 24px rgba(43,38,35,.22); }
+.row { display:grid; grid-template-columns: 30px 1fr auto auto; gap: 10px; align-items:center; padding: 7px 0; border-top: 1px solid rgba(43,38,35,.25); }
+.row:first-of-type { border-top: 0; } .row .nm { font-weight:600; } .row .sub { font-family: var(--type); font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.bars { display:inline-flex; gap:2px; align-items:flex-end; height:14px; } .bars i { width:4px; background: var(--ok); display:block; border-radius:1px; } .bars i.off { background: rgba(43,38,35,.2); } .bars.warn i:not(.off) { background: var(--warn); }
+.chip { display:inline-block; font-family: var(--type); font-size: 12px; border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 12px 2px; background:#fff; }
+.chip.on { background: var(--ink); color: #fff; }
+
+.spread { position:absolute; left:70px; top:54px; width:1140px; height:612px; background: var(--paper); border: 2px solid var(--ink); border-radius: 8px; box-shadow: 0 6px 0 var(--ink), 0 30px 60px rgba(43,38,35,.5); display:grid; grid-template-columns: 372px 1fr; }
+.spread::after { content:""; position:absolute; left:372px; top:0; bottom:0; width:26px; background: linear-gradient(90deg, rgba(43,38,35,.16), rgba(43,38,35,0)); }
+.lot { display:grid; grid-template-columns: 84px 1fr; gap: 10px; align-items:center; padding: 8px 10px; border: 1.5px solid transparent; border-radius: 8px; }
+.lot.sel { border-color: var(--ink); background: #fff; box-shadow: 0 3px 0 var(--ink); }
+.lot img { width: 84px; height: 84px; object-fit: contain; }
+.bar { display:grid; grid-template-columns: 78px 1fr; gap: 10px; align-items:center; margin: 5px 0; } .bar .pips { display:flex; gap:4px; } .bar .pips i { width: 26px; height: 9px; border-radius: 5px; border: 1.5px solid var(--ink); display:block; } .bar .pips i.on { background: var(--ink); }
+.sw { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 -4px 0 rgba(0,0,0,.2), inset 0 3px 0 rgba(255,255,255,.4); position:relative; } .sw.sel { outline: 3px solid var(--ink); outline-offset: 3px; } .sw.taken { opacity:.6; filter: saturate(.55); } .sw.taken::after { content: attr(data-n); position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-family:var(--type); font-weight:700; font-size:13px; }
+</style></head><body class='' style='width:1280px;height:720px'>
+<img src="img/lobby_saucer.png" style="position:absolute;inset:0;width:1280px;height:720px;filter:brightness(.55) saturate(.7)">
+<div class="spread paper">
+  <div style="padding:22px 20px 16px 26px">
+    <div class="caps">The Catalogue</div><div class="display" style="font-size:40px;margin:2px 0 4px">Tonight's lots</div><hr class="rule2" style="margin:8px 0 10px">
+    <div class='lot '><img src='img/earl_game.png'><div><div class='caps'>Lot 1</div><div class='display' style='font-size:30px'>EARL</div><div class='type' style='font-size:11.5px;color:var(--ink-soft)'>All-rounder &nbsp; ●○○</div></div></div><div class='lot sel'><img src='img/grog_game.png'><div><div class='caps'>Lot 2</div><div class='display' style='font-size:30px'>GROG</div><div class='type' style='font-size:11.5px;color:var(--ink-soft)'>Heavy bruiser / grappler &nbsp; ●●○</div></div></div><div class='lot '><img src='img/nesta_game.png'><div><div class='caps'>Lot 3</div><div class='display' style='font-size:30px'>NESTA</div><div class='type' style='font-size:11.5px;color:var(--ink-soft)'>Stance trickster &nbsp; ●●●</div></div></div><div class='lot '><img src='img/moss_game.png'><div><div class='caps'>Lot 4</div><div class='display' style='font-size:30px'>MOSS</div><div class='type' style='font-size:11.5px;color:var(--ink-soft)'>Zoner / puller &nbsp; ●●○</div></div></div>
+    <hr class="rule" style="margin:10px 0 8px"><div class="type" style="font-size:12px;line-height:1.9"><span class="key">W</span><span class="key">S</span> browse &nbsp; <span class="key">A</span><span class="key">D</span> glaze &nbsp; <span class="key">J</span> take this lot &nbsp; <span class="key">E</span> close</div>
+  </div>
+  <div style="padding:22px 30px 16px 44px;position:relative">
+    <div class="caps">Lot 2 &nbsp;·&nbsp; Bull, black basalt stoneware</div>
+    <div class="display" style="font-size:112px;margin:0 0 2px">GROG</div>
+    <div class="serif" style="font-style:italic;font-size:19px;width:360px">Bull, black basalt. Heavy. Souvenir of somewhere.</div>
+    <img src="img/grog_game.png" style="position:absolute;right:6px;top:36px;width:380px;height:380px">
+    <div style="margin-top:22px;width:330px"><div class='bar'><span class='caps'>Weight</span><span class='pips'><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div><div class='bar'><span class='caps'>Speed</span><span class='pips'><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span></div><div class='bar'><span class='caps'>Reach</span><span class='pips'><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i></span></div><div class='bar'><span class='caps'>Recovery</span><span class='pips'><i class="on"></i><i></i><i></i><i></i><i></i></span></div><div class='bar'><span class='caps'>Launch</span><span class='pips'><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></div></div>
+    <div style="margin-top:16px;border:1.5px solid var(--ink);border-radius:8px;padding:10px 14px;background:#fff;width:700px"><span class="caps">His trick</span><div style="font-size:16px;margin-top:2px">Stampede: carries the first fighter he touches. He does not stop at ledges.</div></div>
+    <div style="margin-top:16px"><div class="caps" style="margin-bottom:8px">Glaze (your colour) &nbsp;·&nbsp; numbers show who has taken it</div>
+      <div style="display:flex;gap:14px;align-items:center">
+        <div class="sw taken" data-n="1" style="background:var(--p1)"></div><div class="sw sel" style="background:var(--p2)"></div><div class="sw taken" data-n="3" style="background:var(--p3)"></div>
+        <div class="sw taken" data-n="4" style="background:var(--p4)"></div><div class="sw" style="background:var(--p5)"></div><div class="sw" style="background:var(--p6)"></div><div class="sw taken" data-n="7" style="background:var(--p7)"></div><div class="sw" style="background:var(--p8)"></div>
+        <span class="type" style="font-size:13px;margin-left:8px">Oxblood, dots</span></div></div>
+    <div class="caps" style="position:absolute;right:30px;bottom:16px">The lobby keeps running behind this page</div>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset='utf-8'><title>ui_results</title><link rel='stylesheet' href='base.css'><style>
+.card { position:absolute; background: var(--paper); border: 1.5px solid var(--ink); border-radius: 10px; box-shadow: 0 3px 0 var(--ink), 0 12px 24px rgba(43,38,35,.22); }
+.row { display:grid; grid-template-columns: 30px 1fr auto auto; gap: 10px; align-items:center; padding: 7px 0; border-top: 1px solid rgba(43,38,35,.25); }
+.row:first-of-type { border-top: 0; } .row .nm { font-weight:600; } .row .sub { font-family: var(--type); font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .06em; }
+.bars { display:inline-flex; gap:2px; align-items:flex-end; height:14px; } .bars i { width:4px; background: var(--ok); display:block; border-radius:1px; } .bars i.off { background: rgba(43,38,35,.2); } .bars.warn i:not(.off) { background: var(--warn); }
+.chip { display:inline-block; font-family: var(--type); font-size: 12px; border: 1.5px solid var(--ink); border-radius: 999px; padding: 3px 12px 2px; background:#fff; }
+.chip.on { background: var(--ink); color: #fff; }
+
+.photo { position:absolute; left:44px; top:96px; width:596px; background:#fff; padding: 12px 12px 14px; border: 1.5px solid var(--ink); box-shadow: 0 5px 0 rgba(43,38,35,.8), 0 20px 40px rgba(43,38,35,.3); transform: rotate(-1.6deg); }
+.delft { position:relative; width:572px; height:300px; overflow:hidden; background:#F4F1EA; } .delft img { width: 600px; margin: -8px 0 0 -20px; filter: grayscale(1) contrast(1.9) brightness(1.08); } .delft::after { content:""; position:absolute; inset:0; background:#1E3A8A; mix-blend-mode: screen; }
+table { border-collapse: collapse; width: 100%; } th { text-align:left; font-family: var(--type); font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft); font-weight: 400; padding: 4px 6px; border-bottom: 1px solid var(--ink); }
+td { padding: 9px 6px; border-bottom: 1px solid rgba(43,38,35,.22); font-size: 14.5px; vertical-align: middle; } td.n { font-family: var(--type); text-align:right; } td .sub { font-family: var(--type); font-size: 11px; color: var(--ink-soft); }
+.wins i { display:inline-block; width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid var(--ink); margin-right: 3px; } .wins i.on { background: var(--gilt); }
+</style></head><body class='paper' style='width:1280px;height:720px'>
+<div style="position:absolute;left:44px;top:26px"><div class="caps">Lot 7 &nbsp;·&nbsp; The Willow Plate &nbsp;·&nbsp; hammer fell at 1:52</div><div class="display" style="font-size:52px">Sold to Suspicious Tureen</div></div>
+<div class="photo"><div class="delft"><img src="img/key_art_render.png"></div>
+  <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-top:10px"><div><div class="type" style="font-size:13px;font-weight:700">Lot 1, Slightly Chipped Gravy Boat. Gone: Stampede.</div><div class="caps" style="margin-top:2px">bric-a-brawl &nbsp;·&nbsp; chipped-gravy-boat</div></div>
+  <div style="display:flex;gap:8px"><div class="btn small primary">Copy photo</div><div class="btn small">Save</div></div></div></div>
+<div class="stamp" style="position:absolute;left:452px;top:84px;font-size:58px">Sold</div>
+<div style="position:absolute;left:44px;bottom:30px;width:596px" class="type"><div class="caps">Appraisal earned tonight</div><div style="font-size:14px;margin-top:3px"><b>"Buyer's remorse"</b>: left the island with the lot you were carrying. Unlocks the <b>crackle</b> glaze.</div></div>
+<div style="position:absolute;left:690px;top:104px;width:548px">
+  <table><tr><th></th><th></th><th>Lot</th><th style="text-align:right">KOs</th><th style="text-align:right">Falls</th><th style="text-align:right">Dealt</th><th>For the record</th><th>Wins</th></tr>
+  <tr><td class='n'>1st</td><td><span class='disc' style='background:var(--p2)'>2</span></td><td><b>Suspicious Tureen</b><div class='sub'>Grog</div></td><td class='n'>4</td><td class='n'>2</td><td class='n'>212%</td><td style='font-size:13px;font-style:italic' class='serif'>left the island twice, on purpose</td><td class='wins'><i class='on'></i><i class='on'></i><i class=''></i></td></tr>
+  <tr><td class='n'>2nd</td><td><span class='disc' style='background:var(--p1)'>1</span></td><td><b>Slightly Chipped Gravy Boat</b><div class='sub'>Earl</div></td><td class='n'>2</td><td class='n'>3</td><td class='n'>176%</td><td style='font-size:13px;font-style:italic' class='serif'>rode the horns to the end</td><td class='wins'><i class='on'></i><i class=''></i><i class=''></i></td></tr>
+  <tr><td class='n'>3rd</td><td><span class='disc' style='background:var(--p3)'>3</span></td><td><b>Unsigned Vase</b><div class='sub'>Nesta</div></td><td class='n'>3</td><td class='n'>3</td><td class='n'>143%</td><td style='font-size:13px;font-style:italic' class='serif'>blew three lots off with one puff</td><td class='wins'><i class='on'></i><i class='on'></i><i class=''></i></td></tr>
+  <tr><td class='n'>4th</td><td><span class='disc' style='background:var(--p4)'>4</span></td><td><b>Property of a Gentleman</b><div class='sub'>Moss</div></td><td class='n'>1</td><td class='n'>3</td><td class='n'>98%</td><td style='font-size:13px;font-style:italic' class='serif'>caught a boot. Kept it.</td><td class='wins'><i class=''></i><i class=''></i><i class=''></i></td></tr>
+  <tr><td class='n'>5th</td><td><span class='disc' style='background:var(--p7)'>7</span></td><td><b>Three Legs, One Repaired</b><div class='sub'>Earl</div></td><td class='n'>0</td><td class='n'>2</td><td class='n'>41%</td><td style='font-size:13px;font-style:italic' class='serif'>tapped the last chunk as a teaspoon</td><td class='wins'><i class=''></i><i class=''></i><i class=''></i></td></tr>
+  <tr><td class='n'>6th</td><td><span class='disc' style='background:var(--p8)'>8</span></td><td><b>After Meissen</b><div class='sub'>Nesta</div></td><td class='n'>0</td><td class='n'>2</td><td class='n'>37%</td><td style='font-size:13px;font-style:italic' class='serif'>sneezed herself off the rim</td><td class='wins'><i class=''></i><i class=''></i><i class=''></i></td></tr>
+  </table>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:22px">
+    <div><div class="caps">Next lot</div><div class="display" style="font-size:30px">High Tea &nbsp;<span style="color:var(--cobalt)">in 6</span></div>
+      <div style="width:260px;height:6px;border-radius:3px;background:rgba(43,38,35,.16);margin-top:6px"><div style="width:25%;height:100%;background:var(--cobalt);border-radius:3px"></div></div></div>
+    <div style="display:flex;gap:10px"><div class="btn small">Back to lobby</div><div class="btn small">Catalogue</div></div></div>
+  <div class="caps" style="margin-top:14px">First to three wins takes the sale</div>
+</div>
+</body></html>
