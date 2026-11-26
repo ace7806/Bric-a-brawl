@@ -328,6 +328,7 @@ body {
 }
 .lobby-dock-left, .lobby-dock-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dock-swatch { width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid var(--ink); display: inline-block; flex: none; }
+.dock-portrait { width: 22px; height: 22px; border-radius: 5px; object-fit: cover; border: 2px solid var(--ink); background: #1d1b20; flex: none; }
 .btn.small.active-opt { background: var(--ink); color: #fff; }
 .lobby-ready-pips { display: flex; gap: 5px; align-items: center; }
 .lobby-ready-pips .disc { width: 22px; height: 22px; font-size: 11px; }
@@ -339,15 +340,24 @@ body {
 
 /* Catalogue / Character Select Modal */
 .catalogue-backdrop { position: fixed; inset: 0; background: rgba(43, 38, 35, 0.45); display: flex; align-items: center; justify-content: center; padding: 18px; z-index: 40; }
-.catalogue-spread { position: relative; width: min(980px, 100%); max-height: 90dvh; border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 6px 0 var(--ink), 0 28px 56px rgba(43, 38, 35, 0.45); display: grid; grid-template-columns: 290px 1fr; overflow: hidden; }
+.catalogue-spread { position: relative; width: min(980px, 100%); max-height: 90dvh; border: 2px solid var(--ink); border-radius: 10px; box-shadow: 0 6px 0 var(--ink), 0 28px 56px rgba(43, 38, 35, 0.45); display: grid; grid-template-columns: 310px 1fr; overflow: hidden; }
 .catalogue-list { padding: 18px; border-right: 1px solid rgba(43, 38, 35, 0.22); overflow-y: auto; }
 .catalogue-list-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .catalogue-lots { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .catalogue-detail { padding: 20px 26px; overflow-y: auto; }
-.catalogue-name { font-size: clamp(38px, 5vw, 54px); }
+.catalogue-hero { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.catalogue-hero-portrait { width: 82px; height: 82px; border-radius: 12px; object-fit: cover; border: 3px solid var(--ink); background: #1d1b20; box-shadow: 0 3px 0 var(--ink); flex: none; }
+.catalogue-hero-meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.catalogue-name { font-size: clamp(34px, 4.6vw, 50px); }
 .catalogue-trick { border: 1.5px solid var(--ink); border-radius: 8px; padding: 9px 12px; background: #fff; font-size: 14px; }
-.lot-item { width: 100%; text-align: left; background: transparent; display: flex; flex-direction: column; gap: 2px; padding: 9px 12px; border: 1.5px solid transparent; border-radius: 8px; cursor: pointer; color: var(--ink); }
+.lot-item { width: 100%; text-align: left; background: transparent; display: flex; flex-direction: row; align-items: center; gap: 11px; padding: 8px 10px; border: 1.5px solid transparent; border-radius: 8px; cursor: pointer; color: var(--ink); }
 .lot-item.sel { border-color: var(--ink); background: #fff; box-shadow: 0 3px 0 var(--ink); }
+.lot-portrait { width: 52px; height: 52px; border-radius: 9px; object-fit: cover; border: 2px solid var(--ink); background: #1d1b20; flex: none; }
+.lot-info { min-width: 0; display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.lot-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lot-title { font-size: 22px; line-height: 1.0; }
+.lot-role { font-size: 11px; color: var(--ink-soft); }
+.elem-badge { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 999px; font-family: var(--type); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #191518; border: 1px solid rgba(25, 21, 24, 0.45); line-height: 1.3; }
 .stat-bar { display: grid; grid-template-columns: 78px 1fr; gap: 10px; align-items: center; margin: 5px 0; }
 .stat-pips { display: flex; gap: 4px; }
 .stat-pips i { width: 24px; height: 9px; border-radius: 5px; border: 1.5px solid var(--ink); display: block; }
@@ -445,9 +455,9 @@ body {
   right: 0;
   bottom: max(14px, env(safe-area-inset-bottom));
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
-  padding: 0 14px;
+  padding: 0 12px;
   contain: layout style;
 }
 /* When virtual touch controls are visible, keep tags compact and cleanly above thumb controls */
@@ -466,45 +476,50 @@ body {
   height: 46px;
   padding: 3px 5px;
   border-radius: 6px;
+  grid-template-columns: 1fr auto;
   column-gap: 2px;
 }
 .hud-layer.with-touch .tag::before { display: none; }
-.hud-layer.with-touch .tag .who { font-size: 8.5px; gap: 3px; }
+.hud-layer.with-touch .tag .hud-portrait { display: none; }
+.hud-layer.with-touch .tag .who { grid-column: 1 / 3; font-size: 8.5px; gap: 3px; }
 .hud-layer.with-touch .tag .who .disc { width: 13px; height: 13px; font-size: 8.5px; }
 .hud-layer.with-touch .tag .pct { font-size: 19px; }
 .hud-layer.with-touch .tag .pct small { font-size: 10px; }
 .hud-layer.with-touch .tag .stocks i { width: 6px; height: 8px; }
-.hud-layer.with-touch .tag .gilt { height: 3px; margin-top: 2px; }
+.hud-layer.with-touch .tag .gilt { grid-column: 1 / 3; height: 3px; margin-top: 2px; }
 .hud-layer.with-touch .tag .gad { top: -12px; height: 18px; font-size: 8.5px; }
 
 .tag {
   position: relative;
-  width: 168px;
-  height: 76px;
+  width: 204px;
+  height: 78px;
   background: var(--tag);
   border: 1.5px solid rgba(43, 38, 35, 0.75);
-  border-radius: 6px 14px 14px 6px;
-  padding: 7px 10px 6px 12px;
+  border-radius: 8px 14px 14px 8px;
+  padding: 6px 10px 6px 8px;
   box-shadow: 0 3px 0 rgba(43, 38, 35, 0.6);
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 48px 1fr auto;
   grid-template-rows: auto 1fr auto;
-  column-gap: 6px;
+  column-gap: 7px;
   contain: layout style;
 }
-.hud-tags.compact .tag { width: 148px; }
-.tag::before { content: ""; position: absolute; left: -7px; top: 31px; width: 11px; height: 11px; border-radius: 50%; background: var(--paper); border: 1.5px solid rgba(43, 38, 35, 0.75); }
-.tag .who { grid-column: 1 / 3; display: flex; align-items: center; gap: 6px; font-family: var(--type); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; }
-.tag .who .disc { width: 18px; height: 18px; font-size: 11px; }
-.tag .pct { font-family: var(--display); font-weight: 900; font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144; font-size: 36px; line-height: 0.9; letter-spacing: -0.03em; align-self: end; }
-.tag .pct small { font-size: 16px; margin-left: 1px; }
+.hud-tags.compact .tag { width: 150px; grid-template-columns: 32px 1fr auto; column-gap: 5px; padding: 6px 7px 6px 6px; }
+.tag::before { content: ""; position: absolute; left: -7px; top: 32px; width: 11px; height: 11px; border-radius: 50%; background: var(--paper); border: 1.5px solid rgba(43, 38, 35, 0.75); }
+.tag .hud-portrait { grid-column: 1; grid-row: 1 / 3; width: 48px; height: 52px; border-radius: 6px; object-fit: cover; border: 2px solid var(--ink); background: #1d1b20; align-self: center; }
+.hud-tags.compact .tag .hud-portrait { width: 32px; height: 42px; }
+.tag .who { grid-column: 2 / 4; display: flex; align-items: center; gap: 5px; font-family: var(--type); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; }
+.tag .who .disc { width: 17px; height: 17px; font-size: 10.5px; }
+.tag .pct { font-family: var(--display); font-weight: 900; font-variation-settings: "SOFT" 100, "WONK" 1, "opsz" 144; font-size: 34px; line-height: 0.9; letter-spacing: -0.03em; align-self: end; }
+.hud-tags.compact .tag .pct { font-size: 27px; }
+.tag .pct small { font-size: 15px; margin-left: 1px; }
 .tag .side { align-self: end; justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .tag .stocks { display: flex; gap: 3px; }
-.tag .stocks i { width: 9px; height: 12px; border-radius: 5px 5px 3px 3px; display: block; border: 1px solid rgba(43, 38, 35, 0.7); }
+.tag .stocks i { width: 8px; height: 11px; border-radius: 5px 5px 3px 3px; display: block; border: 1px solid rgba(43, 38, 35, 0.7); }
 .tag .stocks i.lost { background: transparent !important; opacity: 0.45; }
 .tag .gad { min-width: 34px; height: 24px; border-radius: 8px; background: #fff; border: 1.5px solid rgba(43, 38, 35, 0.75); display: flex; align-items: center; justify-content: center; padding: 0 5px; position: absolute; right: 8px; top: -15px; box-shadow: 0 2px 0 rgba(43, 38, 35, 0.6); font-family: var(--type); font-size: 10px; font-weight: 700; }
 .tag .gad b { margin-left: 4px; background: var(--ink); color: #fff; border-radius: 5px; padding: 0 4px; }
-.tag .gilt { grid-column: 1 / 3; height: 5px; border-radius: 3px; background: rgba(43, 38, 35, 0.16); margin-top: 4px; overflow: hidden; }
+.tag .gilt { grid-column: 1 / 4; height: 5px; border-radius: 3px; background: rgba(43, 38, 35, 0.16); margin-top: 4px; overflow: hidden; }
 .tag .gilt i { display: block; height: 100%; background: linear-gradient(90deg, #8A6A22, #E7CF86 60%, #C8A24A); }
 .tag.danger .pct { color: var(--stamp); }
 .tag.hot { transform: rotate(-2.5deg) translateY(-3px); }
@@ -710,16 +725,18 @@ body {
     height: 50px;
     padding: 4px 5px;
     border-radius: 6px;
+    grid-template-columns: 1fr auto;
     column-gap: 2px;
   }
   .tag::before { display: none; }
-  .tag .who { font-size: 8.5px; gap: 3px; }
+  .tag .hud-portrait { display: none; }
+  .tag .who { grid-column: 1 / 3; font-size: 8.5px; gap: 3px; }
   .tag .who .disc { width: 13px; height: 13px; font-size: 8.5px; }
-  .tag .pct { font-size: 20px; }
+  .tag .pct, .hud-tags.compact .tag .pct { font-size: 20px; }
   .tag .pct small { font-size: 10px; }
   .tag .stocks { gap: 2px; }
   .tag .stocks i { width: 6px; height: 8px; }
-  .tag .gilt { height: 3px; margin-top: 2px; }
+  .tag .gilt { grid-column: 1 / 3; height: 3px; margin-top: 2px; }
 
   .results-screen, .error-screen { padding: 16px; gap: 16px; }
   .settings-modal, .guide-modal { padding: 14px; gap: 12px; }

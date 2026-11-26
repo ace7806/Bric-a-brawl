@@ -9,7 +9,7 @@ import {
 } from '@net/index';
 import { createTrysteroTransport } from '@net/transport/trystero';
 import { assert, assertNever, InvariantError, requireKey } from '@sim/assert';
-import { getArenaSpec, getFighterSpec, getGameData, parseArenaId } from '@sim/data';
+import { getArenaSpec, getGameData, parseArenaId } from '@sim/data';
 import {
   ALL_ARENA_IDS, ArenaId, ChunkState, ErrorCode, FighterFlag, FighterId, FighterState,
   GadgetId, KoCause, MatchMode, MoveId, SimEventKind, TeamId, TimelineAction,
@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import { type AudioBusName, AudioEngine, fighterPitchScale } from './audio';
 import { CameraController } from './camera';
 import { CombatFeedbackTracker, computeHitContactPoint, triggerHitFeedback } from './combat-feel';
+import { getElementalFighter } from './elemental-roster';
 import { AuctioneerLineId, GlazeFinish, MusicPhase, QualityTier, ScreenId, SoundId, TouchControlsMode } from './enums';
 import { ALL_KEY_ACTIONS, InputCollector, KeyPreset } from './input';
 import { canvasToPngBlob, renderResultsPhotoCanvas, renderSessionCardCanvas } from './photo';
@@ -329,7 +330,7 @@ export class BricABrawlApp {
   }
 
   public async start(): Promise<void> {
-    setBoot('Loading porcelain & physics...', 45);
+    setBoot('Loading elemental fighters & physics...', 45);
     await Promise.all([initPhysics(), this.renderer.initAssets()]);
     setBoot('Preparing saucer...', 85);
 
@@ -1329,7 +1330,7 @@ export class BricABrawlApp {
       durationSec: this.roundEndDurationSec,
       rows: rows.map((row) => ({
         name: row.name,
-        fighterLabel: getFighterSpec(row.fighterId).name,
+        fighterLabel: getElementalFighter(row.fighterId).name,
         score: row.kos,
         statusLine: row.appraisalLine,
       })),
@@ -1346,7 +1347,7 @@ export class BricABrawlApp {
     const rows = this.buildResultsRows(r, winnerSlot).map((row) => ({
       rank: row.place,
       name: row.name,
-      fighterLabel: getFighterSpec(row.fighterId).name,
+      fighterLabel: getElementalFighter(row.fighterId).name,
       wins: row.wins,
       appraisalLine: row.appraisalLine,
     }));

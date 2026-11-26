@@ -3,3 +3,8 @@ dist/
 .vite/
 *.log
 /tmp/
+assets-src/base-meshes/
+assets-src/elemental/out/
+__pycache__/
+*.pyc
+

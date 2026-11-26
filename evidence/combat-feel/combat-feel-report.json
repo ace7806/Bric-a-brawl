@@ -1,21 +1,21 @@
 {
-  "generatedAtUtc": "2026-11-25T22:06:34.035Z",
+  "generatedAtUtc": "2026-11-26T03:55:35.402Z",
   "allPassed": true,
   "live": {
     "passed": true,
-    "attackLatencyMs": 277,
+    "attackLatencyMs": 387,
     "attackMove": 1,
     "maxLiveSlashes": 1,
     "heavyChargeAndReleaseVerified": true
   },
   "filmstrips": {
     "captured": [
-      "evidence/combat-feel/filmstrip-earl-fheavy.png",
-      "evidence/combat-feel/filmstrip-grog-fheavy.png",
-      "evidence/combat-feel/filmstrip-nesta-jab3.png",
-      "evidence/combat-feel/filmstrip-moss-ftilt.png"
+      "evidence/combat-feel/filmstrip-ignis-fheavy.png",
+      "evidence/combat-feel/filmstrip-basalt-fheavy.png",
+      "evidence/combat-feel/filmstrip-tide-jab3.png",
+      "evidence/combat-feel/filmstrip-zephyr-ftilt.png"
     ],
     "maxDrawCalls": 30,
-    "maxTriangles": 13162
+    "maxTriangles": 45322
   }
 }

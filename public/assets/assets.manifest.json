@@ -1,104 +1,81 @@
 {
-  "license": "CC0-1.0 / project-original",
+  "schemaVersion": 2,
+  "roster": "style-b-elemental-warriors",
   "assets": [
     {
+      "file": "basalt.glb",
+      "bytes": 2127812,
+      "sha256": "bbc35bc60160095468764ff3e7faaf93096e307230be073487771739444c3a1d"
+    },
+    {
+      "file": "basalt.json",
+      "bytes": 1065,
+      "sha256": "680959054e51ef8e17ef8cbadec13be735d86decb8bb68740c2964f25f4ef722"
+    },
+    {
+      "file": "basalt_portrait.png",
+      "bytes": 67448,
+      "sha256": "9eb3752349f8f26ea6e3852d148684ee6ab6c8221e8015c9f38cda7591d750ff"
+    },
+    {
+      "file": "ignis.glb",
+      "bytes": 2838248,
+      "sha256": "f4c44379e26da2dbf7d6d079945e16f5f1d68fe222c6fb772c297dc95a72e11f"
+    },
+    {
+      "file": "ignis.json",
+      "bytes": 1140,
+      "sha256": "870ab8545fad4341e1c997857a65d6804242b949da09df1299141b8f2ee2485a"
+    },
+    {
+      "file": "ignis_portrait.png",
+      "bytes": 72762,
+      "sha256": "4807e9d288de80987e0a94c0e381ea9975422fb39b5e7e9a015cdb37663398f4"
+    },
+    {
       "file": "matcap_packed.png",
-      "source": "assets-src/blender/bake_matcap.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 0,
-      "parts": 0,
       "bytes": 51175,
       "sha256": "3ab018f3e5f251030a3ea2029756625d983a8f5ef5207ae6753799f34b85fc3c"
     },
     {
-      "file": "earl.opt.glb",
-      "source": "assets-src/blender/characters.py + export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 5468,
-      "parts": 6,
-      "bytes": 84124,
-      "sha256": "66b7192a9b7528f005b75fbe89ebfb8f4290e183b9e3e6983625682de1df9bbf"
-    },
-    {
-      "file": "earl.json",
-      "source": "assets-src/blender/export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 5468,
-      "parts": 6,
-      "bytes": 417,
-      "sha256": "19c8231c80d10ab41ae55805f78857633d9f74824d5e7b7fba9da992831f282e"
-    },
-    {
-      "file": "grog.opt.glb",
-      "source": "assets-src/blender/characters.py + export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 6220,
-      "parts": 6,
-      "bytes": 95836,
-      "sha256": "9ac6e6fa55e876a9cc0c5930ef97c7bd74f9e7f6a969ca406a6e9eb3edc90454"
-    },
-    {
-      "file": "grog.json",
-      "source": "assets-src/blender/export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 6220,
-      "parts": 6,
-      "bytes": 442,
-      "sha256": "a19fab1b0374505fdeabd77a781e23422650c69b42d0dcd4e9a6196092e51b90"
-    },
-    {
-      "file": "nesta.opt.glb",
-      "source": "assets-src/blender/characters.py + export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 5120,
-      "parts": 3,
-      "bytes": 89916,
-      "sha256": "723bb39007c58681eba8fe21dbc1dc1afda597375a6e13170a9cd11b9eae9976"
-    },
-    {
-      "file": "nesta.json",
-      "source": "assets-src/blender/export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 5120,
-      "parts": 3,
-      "bytes": 422,
-      "sha256": "1302d6caa4964dd1ff193634e28a2fe602824a27ffd7fb3e3011f855a79a8822"
-    },
-    {
-      "file": "moss.opt.glb",
-      "source": "assets-src/blender/characters.py + export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 4876,
-      "parts": 7,
-      "bytes": 78548,
-      "sha256": "c997a48fe76ccaccfc7daed36b118349a8543928965480e1d3f02cc1a64719c6"
-    },
-    {
-      "file": "moss.json",
-      "source": "assets-src/blender/export_gltf.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 4876,
-      "parts": 7,
-      "bytes": 508,
-      "sha256": "9c743b330eee5833d0685fb68d427dedc2a485f59864b08a91cec5ebdf1f05fd"
-    },
-    {
       "file": "silhouette_iou.json",
-      "source": "assets-src/blender/render_sheets.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 0,
-      "parts": 0,
-      "bytes": 270,
-      "sha256": "2c1b8c496560a7c0f3e2c60a804a49039c1ec142df734e32163a43ef990a026b"
+      "bytes": 251,
+      "sha256": "e18bc6f91a2511656506f26c93da3d29d4d24d2cbb22938f6a9ecc63b92f1112"
+    },
+    {
+      "file": "tide.glb",
+      "bytes": 2670092,
+      "sha256": "da9f2cf6a1df0d8d7fa06c5f9a04e26887eb5c776a963507bb86553ad4a0a0b4"
+    },
+    {
+      "file": "tide.json",
+      "bytes": 1094,
+      "sha256": "ad72ae2c88329e3a1c607134f6226bf709d0320c24e83f8c52d8f1d6de69987c"
+    },
+    {
+      "file": "tide_portrait.png",
+      "bytes": 65383,
+      "sha256": "0a0641263514ce655a474c0bb1a85d30d7792699850de19614070fe8138e76ab"
     },
     {
       "file": "tri_counts.json",
-      "source": "assets-src/blender/measure.py",
-      "license": "CC0-1.0 / project-original",
-      "triangles": 0,
-      "parts": 0,
-      "bytes": 518,
-      "sha256": "3d8c2a3e4d49598eba739b34f6d551caefa56995fe1763d3288c1e508403c25e"
+      "bytes": 891,
+      "sha256": "8958be7b0e12b64a39316f742948bf3b72c1d0ce6bcc705523a5dc3907e7df0c"
+    },
+    {
+      "file": "zephyr.glb",
+      "bytes": 2580252,
+      "sha256": "ce5e7f99156676fa1d7ed9a10df542b7447a92a796f619c70be6a01b3cbd346b"
+    },
+    {
+      "file": "zephyr.json",
+      "bytes": 1111,
+      "sha256": "6e478aa6511b25d7647b139cca459aa2b323ada6f053c6478bef85996602fa98"
+    },
+    {
+      "file": "zephyr_portrait.png",
+      "bytes": 62615,
+      "sha256": "924bbad1f8661f8b963349148cf66236c9be44716b4e99a793459af1a19e5711"
     }
   ]
 }

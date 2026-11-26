@@ -6,6 +6,7 @@ import { getEffectiveStartup } from '@sim/fighter-state';
 import type { FighterRuntime } from '@sim/types';
 import { fighterPitchScale, type AudioEngine } from './audio';
 import type { CameraController } from './camera';
+import { getElementalFighter } from './elemental-roster';
 import { SoundId } from './enums';
 import type { SlashOptions, VfxSystem } from './vfx';
 
@@ -177,18 +178,19 @@ export function buildSlashForMove(fighter: FighterRuntime, liveryHex: string): S
   if (fighter.id === FighterId.Moss && move.id === MoveId.Dspec) return null;
 
   const pal = getGameData().palette;
+  const elem = getElementalFighter(fighter.id);
   const facing = (fighter.flags & FighterFlag.FacingRight) !== 0 ? 1 : -1;
   const hb = getMoveHitbox(fighter, move);
   const cx = (hb.x0 + hb.x1) * 0.5;
   const cy = (hb.y0 + hb.y1) * 0.5;
   const isHeavy = move.moveClass === MoveClass.Heavy;
   const colorHex = isHeavy
-    ? '#FFE078'
+    ? elem.heavySlashHex
     : move.moveClass === MoveClass.Special
-      ? pal.accents['gilt_hi'] ?? '#F0CE6E'
+      ? elem.slashHex
       : move.id === MoveId.Jab1 || move.id === MoveId.Jab2
-        ? '#FFF8EB'
-        : tintTowardWhite(liveryHex, 0.56);
+        ? tintTowardWhite(elem.slashHex, 0.45)
+        : tintTowardWhite(elem.slashHex, 0.18) || tintTowardWhite(liveryHex, 0.56) || pal.accents['gilt_hi']!;
   const radius = Math.min(1.18, Math.max(0.72, move.reach * (isHeavy ? 0.56 : 0.48)));
   const durationFrames = isHeavy ? 11 : 8;
   const thickness = isHeavy ? 1.12 : 0.96;

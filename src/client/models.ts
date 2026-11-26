@@ -1,20 +1,27 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { InvariantError, assert, assertNever } from '@sim/assert';
-import { getFighterSpec, getGameData } from '@sim/data';
-import { ArenaId, ErrorCode, FighterId, GadgetId, NestaSize } from '@sim/enums';
+import { getGameData } from '@sim/data';
+import { ArenaId, ErrorCode, FighterId, GadgetId } from '@sim/enums';
+import { getElementalFighter } from './elemental-roster';
+import {
+  ElementalToonMaterial,
+  applyElementalFinish,
+  createElementalOutlineMaterial,
+  createElementalToonMaterial,
+  ensureSmoothOutlineNormals,
+  getFallbackBlackTexture,
+  getFallbackWhiteTexture,
+} from './elemental-toon-material';
 import { GlazeFinish } from './enums';
 import {
   GlazeMaterial,
-  applyGlazeFinish,
-  buildFighterPalette,
   createGlazeMaterial,
   hexToLinearVec3,
   loadPackedMatcap,
 } from './glaze-material';
-import type { BoneSlot, FighterBoneRig } from './poses';
+import type { ElementalFighterRig } from './poses';
 
 export interface CeramicAssetPack {
   readonly matcap: THREE.Texture;
@@ -23,87 +30,51 @@ export interface CeramicAssetPack {
 
 export interface InstantiatedFighter {
   readonly group: THREE.Group;
-  readonly rig: FighterBoneRig;
-  readonly material: GlazeMaterial;
+  readonly rig: ElementalFighterRig;
+  readonly material: ElementalToonMaterial;
   readonly scale: number;
 }
 
-const FIGHTER_ASSET_FILE: Record<FighterId, string> = {
-  [FighterId.Earl]: './assets/earl.opt.glb',
-  [FighterId.Grog]: './assets/grog.opt.glb',
-  [FighterId.Nesta]: './assets/nesta.opt.glb',
-  [FighterId.Moss]: './assets/moss.opt.glb',
-};
-
-const FIGHTER_BODY_BONE: Record<FighterId, string> = {
-  [FighterId.Earl]: 'earl_body',
-  [FighterId.Grog]: 'grog_body',
-  [FighterId.Nesta]: 'nesta_body',
-  [FighterId.Moss]: 'moss_body',
-};
+const ALL_SLOT_FIGHTERS: readonly FighterId[] = [
+  FighterId.Earl,
+  FighterId.Grog,
+  FighterId.Nesta,
+  FighterId.Moss,
+];
 
 export async function loadCeramicAssets(): Promise<CeramicAssetPack> {
   const loader = new GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
-  const entries: readonly FighterId[] = [FighterId.Earl, FighterId.Grog, FighterId.Nesta, FighterId.Moss];
   const [matcap, ...gltfs] = await Promise.all([
     loadPackedMatcap('./assets/matcap_packed.png'),
-    ...entries.map((id) => loader.loadAsync(FIGHTER_ASSET_FILE[id])),
+    ...ALL_SLOT_FIGHTERS.map((id) => loader.loadAsync(getElementalFighter(id).glbUrl)),
   ]);
   const fighters = new Map<FighterId, GLTF>();
-  entries.forEach((id, idx) => {
+  ALL_SLOT_FIGHTERS.forEach((id, idx) => {
     const gltf = gltfs[idx];
     if (!gltf) throw new InvariantError(ErrorCode.MissingRequiredEntry, `Failed to load GLB for fighter ${id}`);
     let hasSkinned = false;
     gltf.scene.traverse((obj) => {
-      if ((obj as THREE.SkinnedMesh).isSkinnedMesh) hasSkinned = true;
+      if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
+        hasSkinned = true;
+      }
     });
     assert(hasSkinned, ErrorCode.InvariantViolation, `Fighter ${id} GLB lacks SkinnedMesh`);
+    assert(gltf.animations.length >= 20, ErrorCode.InvariantViolation, `Fighter ${id} GLB lacks embedded Smash clips`);
     fighters.set(id, gltf);
   });
   return { matcap, fighters };
 }
 
-function findBoneSlot(bones: readonly THREE.Bone[], name: string): BoneSlot | null {
-  const b = bones.find((bn) => bn.name === name);
-  if (!b) return null;
-  return { bone: b, restPos: b.position.clone(), restQuat: b.quaternion.clone() };
+function extractGltfTextures(mesh: THREE.SkinnedMesh): { albedoMap: THREE.Texture; emissiveMap: THREE.Texture } {
+  const srcMat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const std = srcMat as THREE.MeshStandardMaterial | undefined;
+  const albedoMap = std?.map ?? getFallbackWhiteTexture();
+  const emissiveMap = std?.emissiveMap ?? getFallbackBlackTexture();
+  return { albedoMap, emissiveMap };
 }
 
-function extractBoneRig(fighterId: FighterId, skeleton: THREE.Skeleton): FighterBoneRig {
-  const bs = skeleton.bones;
-  const body = findBoneSlot(bs, FIGHTER_BODY_BONE[fighterId]);
-  if (!body) throw new InvariantError(ErrorCode.MissingRequiredEntry, `Missing body bone for fighter ${fighterId}`);
-  const prefix = FIGHTER_BODY_BONE[fighterId].split('_')[0]!;
-
-  // GLB export emits flat sibling bones; reparent limbs & accessories under body bone so body
-  // lunge, squash, lean, spins, and hitstop rattle move the whole fighter cohesively without detached parts.
-  const attachChild = (name: string): BoneSlot | null => {
-    const b = bs.find((bn) => bn.name === name);
-    if (!b) return null;
-    if (b.parent !== body.bone) {
-      b.position.sub(body.restPos);
-      body.bone.add(b);
-    }
-    return { bone: b, restPos: b.position.clone(), restQuat: b.quaternion.clone() };
-  };
-
-  return {
-    fighterId,
-    body,
-    lid: attachChild(`${prefix}_lid`),
-    head: attachChild(`${prefix}_head`),
-    hat: attachChild(`${prefix}_hat`),
-    rod: attachChild(`${prefix}_rod`),
-    handF: attachChild(`${prefix}_handF`),
-    handB: attachChild(`${prefix}_handB`),
-    footF: attachChild(`${prefix}_footF`),
-    footB: attachChild(`${prefix}_footB`),
-    hoofFL: attachChild(`${prefix}_hoofFL`),
-    hoofFR: attachChild(`${prefix}_hoofFR`),
-    hoofBL: attachChild(`${prefix}_hoofBL`),
-    hoofBR: attachChild(`${prefix}_hoofBR`),
-  };
+function findBone(bones: readonly THREE.Bone[], name: string): THREE.Bone | null {
+  return bones.find((b) => b.name === name) ?? null;
 }
 
 export function instantiateFighterRig(
@@ -111,337 +82,108 @@ export function instantiateFighterRig(
   fighterId: FighterId,
   liveryHex: string,
   finish: GlazeFinish = GlazeFinish.Standard,
+  includeOutline = true,
 ): InstantiatedFighter {
   const gltf = pack.fighters.get(fighterId);
   if (!gltf) throw new InvariantError(ErrorCode.MissingRequiredEntry, `Unloaded fighter GLTF ${fighterId}`);
+  const info = getElementalFighter(fighterId);
   const cloned = SkeletonUtils.clone(gltf.scene);
-  const group = new THREE.Group();
-  group.add(cloned);
 
-  const material = createGlazeMaterial({
-    matcap: pack.matcap,
-    usePaletteAttr: true,
-    palette: buildFighterPalette(fighterId, liveryHex),
-    speckle: 1.0,
-  });
-  applyGlazeFinish(material, finish);
+  const group = new THREE.Group();
+  const fxGroup = new THREE.Group();
+  const modelGroup = new THREE.Group();
+  modelGroup.add(cloned);
+  fxGroup.add(modelGroup);
+  group.add(fxGroup);
 
   let skinned: THREE.SkinnedMesh | null = null;
   cloned.traverse((obj) => {
     if ((obj as THREE.SkinnedMesh).isSkinnedMesh) {
-      const sm = obj as THREE.SkinnedMesh;
-      sm.material = material;
-      sm.frustumCulled = false;
-      skinned = sm;
+      skinned = obj as THREE.SkinnedMesh;
     }
   });
   if (skinned === null) {
     throw new InvariantError(ErrorCode.InvariantViolation, `Cloned fighter ${fighterId} lacks SkinnedMesh`);
   }
-  const rig = extractBoneRig(fighterId, (skinned as THREE.SkinnedMesh).skeleton);
-  (skinned as THREE.SkinnedMesh).updateMatrixWorld(true);
-  const spec = getFighterSpec(fighterId);
-  const scale = fighterId === FighterId.Nesta && spec.nestaSizes ? spec.nestaSizes.get(NestaSize.Mid)!.scale : 1.0;
-  return { group, rig, material, scale };
-}
+  const sm = skinned as THREE.SkinnedMesh;
+  sm.userData.sharedGeo = true;
 
-interface LodPartChunk {
-  readonly geo: THREE.BufferGeometry;
-  readonly boneIndex: number;
-  readonly paletteSlot: number;
-  readonly gloss: number;
-  readonly metal: number;
-}
-
-function makeLodBlob(rx: number, ry: number, rz: number, wSeg = 6, hSeg = 4): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, wSeg, hSeg);
-  geo.scale(rx, ry, rz);
-  return geo;
-}
-
-function makeLodLathe(
-  pts: readonly (readonly [number, number])[],
-  segs = 8,
-  squashZ = 1.0,
-): THREE.BufferGeometry {
-  return makeLathe(pts, segs, 0.012, squashZ);
-}
-
-function makeLodHandGeo(r: number): THREE.BufferGeometry {
-  return makeLodBlob(r, r * 0.9, r * 0.8, 6, 4);
-}
-
-function makeLodFootGeo(rx: number, ry: number, rz: number): THREE.BufferGeometry {
-  return makeLodBlob(rx, ry, rz, 6, 3);
-}
-
-function mergeLodPartsToSkinnedMesh(
-  parts: readonly LodPartChunk[],
-  bones: THREE.Bone[],
-  material: GlazeMaterial,
-): THREE.SkinnedMesh {
-  let totalVerts = 0;
-  let totalIndices = 0;
-  const prepped = parts.map((p) => {
-    const g = p.geo;
-    if (!g.getAttribute('normal')) g.computeVertexNormals();
-    const pos = g.getAttribute('position') as THREE.BufferAttribute;
-    const idx = g.getIndex();
-    totalVerts += pos.count;
-    totalIndices += idx ? idx.count : pos.count;
-    return { ...p, pos, norm: g.getAttribute('normal') as THREE.BufferAttribute, idx };
+  const { albedoMap, emissiveMap } = extractGltfTextures(sm);
+  const rimCol = hexToLinearVec3(liveryHex).lerp(hexToLinearVec3(info.rimHex), 0.45);
+  const material = createElementalToonMaterial({
+    albedoMap,
+    emissiveMap,
+    rimColor: rimCol,
+    rimStrength: 0.28,
+    emissiveBoost: 0.48,
   });
+  applyElementalFinish(material, finish);
 
-  const positions = new Float32Array(totalVerts * 3);
-  const normals = new Float32Array(totalVerts * 3);
-  const colors = new Float32Array(totalVerts * 4);
-  const skinIndices = new Uint16Array(totalVerts * 4);
-  const skinWeights = new Float32Array(totalVerts * 4);
-  const indices = new Uint32Array(totalIndices);
+  sm.material = material;
+  sm.frustumCulled = false;
 
-  let vOff = 0;
-  let iOff = 0;
-  for (const p of prepped) {
-    const count = p.pos.count;
-    const slotR = p.paletteSlot / 15.0;
-    for (let v = 0; v < count; v++) {
-      const i3 = (vOff + v) * 3;
-      const i4 = (vOff + v) * 4;
-      positions[i3] = p.pos.getX(v);
-      positions[i3 + 1] = p.pos.getY(v);
-      positions[i3 + 2] = p.pos.getZ(v);
-      const nx = p.norm.getX(v);
-      const ny = p.norm.getY(v);
-      const nz = p.norm.getZ(v);
-      normals[i3] = nx;
-      normals[i3 + 1] = ny;
-      normals[i3 + 2] = nz;
-      const ao = 0.55 + 0.45 * Math.max(0, Math.min(1, 0.5 + 0.5 * ny));
-      colors[i4] = slotR;
-      colors[i4 + 1] = p.gloss;
-      colors[i4 + 2] = ao;
-      colors[i4 + 3] = p.metal;
-      skinIndices[i4] = p.boneIndex;
-      skinWeights[i4] = 1.0;
-    }
-    if (p.idx) {
-      for (let k = 0; k < p.idx.count; k++) {
-        indices[iOff++] = p.idx.getX(k) + vOff;
-      }
+  // Optional Guilty-Gear style smooth-normal BackSide comic ink outline sharing the exact same skeleton!
+  let outlineMesh: THREE.SkinnedMesh | null = null;
+  if (includeOutline) {
+    ensureSmoothOutlineNormals(sm.geometry);
+    const outMat = createElementalOutlineMaterial(0.010);
+    outlineMesh = new THREE.SkinnedMesh(sm.geometry, outMat);
+    outlineMesh.name = `${sm.name}_Outline`;
+    outlineMesh.userData.sharedGeo = true;
+    outlineMesh.frustumCulled = false;
+    outlineMesh.bind(sm.skeleton, sm.bindMatrix);
+    if (sm.parent) {
+      sm.parent.add(outlineMesh);
     } else {
-      for (let k = 0; k < count; k++) {
-        indices[iOff++] = k + vOff;
-      }
+      modelGroup.add(outlineMesh);
     }
-    vOff += count;
-    p.geo.dispose();
   }
 
-  const merged = new THREE.BufferGeometry();
-  merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
-  merged.setAttribute('color', new THREE.BufferAttribute(colors, 4));
-  merged.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinIndices, 4));
-  merged.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinWeights, 4));
-  merged.setIndex(new THREE.BufferAttribute(indices, 1));
-  merged.computeBoundingSphere();
-
-  const skinned = new THREE.SkinnedMesh(merged, material);
-  skinned.frustumCulled = false;
-  for (const b of bones) {
-    if (b.parent === null) skinned.add(b);
+  const mixer = new THREE.AnimationMixer(cloned);
+  const clips = new Map<string, THREE.AnimationClip>();
+  for (const clip of gltf.animations) {
+    clips.set(clip.name, clip);
   }
-  skinned.updateMatrixWorld(true);
-  skinned.bind(new THREE.Skeleton(bones));
-  return skinned;
-}
+  const actions = new Map<string, THREE.AnimationAction>();
 
-export function instantiateFighterLodRig(
-  pack: CeramicAssetPack,
-  fighterId: FighterId,
-  liveryHex: string,
-  finish: GlazeFinish = GlazeFinish.Standard,
-): InstantiatedFighter {
-  const group = new THREE.Group();
-  const palette = buildFighterPalette(fighterId, liveryHex);
-  const material = createGlazeMaterial({
-    matcap: pack.matcap,
-    usePaletteAttr: true,
-    palette,
-    speckle: 0.0,
-  });
-  applyGlazeFinish(material, finish);
-  material.uniforms.uSpeckle.value = 0;
-  material.uniforms.uCrack.value = 0;
-
-  const bones: THREE.Bone[] = [];
-  const boneIndexMap = new Map<THREE.Bone, number>();
-  const parts: LodPartChunk[] = [];
-
-  const regBone = (name: string, x: number, y: number, z: number, parent?: THREE.Bone): BoneSlot => {
-    const bone = new THREE.Bone();
-    bone.name = name;
-    bone.position.set(x, y, z);
-    if (parent) parent.add(bone);
-    boneIndexMap.set(bone, bones.length);
-    bones.push(bone);
-    return { bone, restPos: bone.position.clone(), restQuat: bone.quaternion.clone() };
-  };
-
-  const pushPart = (
-    slot: BoneSlot,
-    geo: THREE.BufferGeometry,
-    paletteSlot: number,
-    gloss = 1.0,
-    pos?: readonly [number, number, number],
-    rot?: readonly [number, number, number],
-    metal = 0.0,
-  ): void => {
-    if (rot) {
-      if (rot[0] !== 0) geo.rotateX(rot[0]);
-      if (rot[1] !== 0) geo.rotateY(rot[1]);
-      if (rot[2] !== 0) geo.rotateZ(rot[2]);
-    }
-    const ox = slot.restPos.x + (pos ? pos[0] : 0);
-    const oy = slot.restPos.y + (pos ? pos[1] : 0);
-    const oz = slot.restPos.z + (pos ? pos[2] : 0);
-    if (ox !== 0 || oy !== 0 || oz !== 0) geo.translate(ox, oy, oz);
-    parts.push({ geo, boneIndex: boneIndexMap.get(slot.bone)!, paletteSlot, gloss, metal });
-  };
-
-  const prefix = FIGHTER_BODY_BONE[fighterId].split('_')[0]!;
-  const body = regBone(`${prefix}_body`, 0, 0, 0);
-  const regChild = (name: string, x: number, y: number, z: number): BoneSlot => regBone(name, x, y, z, body.bone);
-  let lid: BoneSlot | null = null;
-  let head: BoneSlot | null = null;
-  let hat: BoneSlot | null = null;
-  let rod: BoneSlot | null = null;
-  let handF: BoneSlot | null = null;
-  let handB: BoneSlot | null = null;
-  let footF: BoneSlot | null = null;
-  let footB: BoneSlot | null = null;
-  let hoofFL: BoneSlot | null = null;
-  let hoofFR: BoneSlot | null = null;
-  let hoofBL: BoneSlot | null = null;
-  let hoofBR: BoneSlot | null = null;
-
-  switch (fighterId) {
-    case FighterId.Earl: {
-      // Palette: 0=trim(livery), 1=body(bone), 2=livery, 3=bone, 6=gilt
-      const z0 = 0.16;
-      pushPart(body, makeLodLathe([[0, 0], [0.33, 0.06], [0.54, 0.28], [0.635, 0.60], [0.52, 0.90], [0.35, 1.08]], 8), 1, 1.0, [0, z0, 0]);
-      pushPart(body, makeLodLathe([[0.36, 0.97], [0.47, 0.98], [0.35, 1.085]], 8), 2, 1.0, [0, z0, 0]);
-      pushPart(body, makeTube([[0.50, z0 + 0.46, 0], [0.85, z0 + 0.65, 0], [1.10, z0 + 1.02, 0]], 0.10, 3, 4), 1, 1.0);
-      pushPart(body, makeTube([[-0.50, z0 + 0.90, 0], [-0.94, z0 + 0.68, 0], [-0.55, z0 + 0.34, 0]], 0.06, 3, 4), 2, 1.0);
-
-      lid = regChild('earl_lid', 0, z0 + 1.085, 0);
-      pushPart(lid, makeLodLathe([[0.34, 0], [0.22, 0.12], [0.06, 0.21], [0.10, 0.30], [0, 0.35]], 7), 2, 1.0);
-
-      handF = regChild('earl_handF', 0.16, z0 + 0.36, 0.88);
-      pushPart(handF, makeLodHandGeo(0.15), 2, 1.0);
-      handB = regChild('earl_handB', 0.16, z0 + 0.36, -0.88);
-      pushPart(handB, makeLodHandGeo(0.15), 2, 1.0);
-
-      footF = regChild('earl_footF', 0.02, 0, 0.25);
-      pushPart(footF, makeLodFootGeo(0.20, 0.075, 0.13), 0, 1.0, [0.05, 0.075, 0]);
-      footB = regChild('earl_footB', 0.02, 0, -0.25);
-      pushPart(footB, makeLodFootGeo(0.20, 0.075, 0.13), 0, 1.0, [0.05, 0.075, 0]);
-      break;
-    }
-    case FighterId.Grog: {
-      // Palette: 0=body(basalt), 1=hoof(tenmoku), 2=livery, 3=bone, 6=gilt
-      const zc = 0.98;
-      const bodyLathe = makeLodLathe([[0, -0.80], [0.38, -0.70], [0.55, -0.28], [0.62, 0.28], [0.54, 0.70], [0, 0.86]], 8, 0.94);
-      bodyLathe.rotateZ(-Math.PI / 2);
-      pushPart(body, bodyLathe, 0, 0.35, [0, zc, 0]);
-
-      const sash = makeLodLathe([[0.57, -0.24], [0.60, 0.02], [0.63, 0.25]], 8, 0.94);
-      sash.rotateZ(-Math.PI / 2);
-      pushPart(body, sash, 2, 1.0, [0, zc, 0]);
-
-      head = regChild('grog_head', 0.92, zc + 0.16, 0);
-      pushPart(head, makeLodBlob(0.37, 0.35, 0.36, 6, 4), 0, 0.35);
-      pushPart(head, makeTube([[0, 0, 0], [0.12, 0.24, 0.22], [0.28, 0.44, 0.26]], 0.07, 3, 4), 3, 1.0, [-0.02, 0.27, 0.27]);
-      pushPart(head, makeTube([[0, 0, 0], [0.12, 0.24, -0.22], [0.28, 0.44, -0.26]], 0.07, 3, 4), 3, 1.0, [-0.02, 0.27, -0.27]);
-
-      const makeHoof = () => makeLodLathe([[0, 0], [0.16, 0], [0.17, 0.08], [0.13, 0.26]], 6);
-      hoofFL = regChild('grog_hoofFL', 0.56, 0, 0.33);
-      pushPart(hoofFL, makeHoof(), 2, 1.0);
-      hoofFR = regChild('grog_hoofFR', 0.56, 0, -0.33);
-      pushPart(hoofFR, makeHoof(), 2, 1.0);
-      hoofBL = regChild('grog_hoofBL', -0.50, 0, 0.33);
-      pushPart(hoofBL, makeHoof(), 1, 0.35);
-      hoofBR = regChild('grog_hoofBR', -0.50, 0, -0.33);
-      pushPart(hoofBR, makeHoof(), 1, 0.35);
-      break;
-    }
-    case FighterId.Nesta: {
-      // Palette: 0=trim(livery), 1=body(slip), 2=livery, 3=bone
-      const K = 0.88;
-      pushPart(body, makeLodLathe([[0, 0], [0.35 * K, 0.04], [0.47 * K, 0.34], [0.50 * K, 0.58], [0.45 * K, 0.84], [0.34 * K, 1.04]], 8), 1, 1.0);
-      pushPart(body, makeLodLathe([[0.335 * K, 1.04], [0.385 * K, 1.18], [0.36 * K, 1.36], [0.24 * K, 1.54], [0, 1.68]], 8), 2, 1.0);
-      pushPart(body, makeLodBlob(0.12, 0.10, 0.12, 5, 3), 2, 1.0, [-0.36 * K, 1.17, 0]);
-      pushPart(body, makeLodBlob(0.08, 0.21, 0.21, 5, 3), 3, 1.0, [0.30 * K, 1.285, 0]);
-
-      handF = regChild('nesta_handF', 0.14, 0.68, 0.66);
-      pushPart(handF, makeLodHandGeo(0.125), 2, 1.0);
-      handB = regChild('nesta_handB', 0.14, 0.68, -0.66);
-      pushPart(handB, makeLodHandGeo(0.125), 2, 1.0);
-      break;
-    }
-    case FighterId.Moss: {
-      // Palette: 0=coat(terracotta), 2=livery, 3=bone, 8=skin(bisque), 10=boot(tenmoku), 11=iron
-      pushPart(body, makeLodLathe([[0, 0.15], [0.32, 0.16], [0.40, 0.40], [0.34, 0.72], [0.24, 0.90]], 7), 0, 0.0);
-      pushPart(body, makeLodBlob(0.24, 0.23, 0.24, 6, 3), 8, 0.35, [0, 0.99, 0]);
-      pushPart(body, makeLodLathe([[0, 0.30], [0.16, 0.48], [0.24, 0.78], [0.15, 1.02], [0, 1.04]], 6, 0.66), 3, 1.0, [0.21, -0.03, 0]);
-
-      hat = regChild('moss_hat', 0, 1.07, 0);
-      pushPart(hat, makeLodLathe([[0, -0.03], [0.36, 0.0], [0.26, 0.20], [0.14, 0.60], [0, 1.0]], 7), 2, 1.0, [0, 0, 0], [0, 0, 0.24]);
-
-      handF = regChild('moss_handF', 0.30, 0.50, 0.66);
-      pushPart(handF, makeLodHandGeo(0.12), 2, 1.0);
-      handB = regChild('moss_handB', 0.30, 0.50, -0.66);
-      pushPart(handB, makeLodHandGeo(0.12), 2, 1.0);
-
-      footF = regChild('moss_footF', 0, 0, 0.19);
-      pushPart(footF, makeLodFootGeo(0.18, 0.075, 0.12), 10, 0.35, [0.06, 0.075, 0]);
-      footB = regChild('moss_footB', 0, 0, -0.19);
-      pushPart(footB, makeLodFootGeo(0.18, 0.075, 0.12), 10, 0.35, [0.06, 0.075, 0]);
-
-      rod = regChild('moss_rod', 0.30, 0.50, 0.66);
-      pushPart(rod, makeTube([[0, 0, 0], [0.70, 0.72, 0], [1.42, 1.18, 0]], 0.022, 3, 4), 11, 0.35);
-      pushPart(rod, makeLodBlob(0.06, 0.08, 0.06, 5, 3), 2, 1.0, [1.50, 0.42, 0]);
-      break;
-    }
-    default:
-      assertNever(fighterId, 'instantiateFighterLodRig');
-  }
-
-  const skinned = mergeLodPartsToSkinnedMesh(parts, bones, material);
-  group.add(skinned);
-
-  const rig: FighterBoneRig = {
+  const bones = sm.skeleton.bones;
+  const rig: ElementalFighterRig = {
     fighterId,
-    body,
-    lid,
-    head,
-    hat,
-    rod,
-    handF,
-    handB,
-    footF,
-    footB,
-    hoofFL,
-    hoofFR,
-    hoofBL,
-    hoofBR,
+    fxGroup,
+    modelGroup,
+    mixer,
+    clips,
+    actions,
+    skinnedMesh: sm,
+    outlineMesh,
+    rootBone: findBone(bones, 'Root'),
+    handR: findBone(bones, 'Hand.R'),
+    handL: findBone(bones, 'Hand.L'),
+    weaponR: findBone(bones, 'Weapon.R'),
+    headBone: findBone(bones, 'Head'),
+    activeActionName: null,
+    activeAction: null,
+    lastEvalFrame: -1,
   };
-  const spec = getFighterSpec(fighterId);
-  const scale = fighterId === FighterId.Nesta && spec.nestaSizes ? spec.nestaSizes.get(NestaSize.Mid)!.scale : 1.0;
-  return { group, rig, material, scale };
+
+  // Bind only Idle on spawn (rest bind lazily on first use — 45x faster spawn!)
+  const idleClip = clips.get('Idle');
+  if (idleClip) {
+    const idleAction = mixer.clipAction(idleClip);
+    actions.set('Idle', idleAction);
+    idleAction.play();
+    idleAction.time = 0;
+    mixer.update(0);
+    rig.activeActionName = 'Idle';
+    rig.activeAction = idleAction;
+    rig.lastEvalFrame = 0;
+  }
+  sm.updateMatrixWorld(true);
+
+  return { group, rig, material, scale: info.gameplayScale };
 }
 
-// ---------------------------------------------------------------- Procedural Ceramic Primitives
+// ---------------------------------------------------------------- Procedural Arena & Gadget Props
 
 function palColor(name: string): THREE.Vector3 {
   const p = getGameData().palette;
@@ -455,7 +197,12 @@ function palColor(name: string): THREE.Vector3 {
   throw new InvariantError(ErrorCode.MissingRequiredEntry, `Unknown palette color ${name}`);
 }
 
-function ceramicMat(matcap: THREE.Texture, color: string | THREE.Vector3, finish: 'glaze' | 'satin' | 'bisque' | 'gilt' = 'glaze', alpha = 1.0): GlazeMaterial {
+function ceramicMat(
+  matcap: THREE.Texture,
+  color: string | THREE.Vector3,
+  finish: 'glaze' | 'satin' | 'bisque' | 'gilt' = 'glaze',
+  alpha = 1.0,
+): GlazeMaterial {
   const vec = typeof color === 'string' ? (color.startsWith('#') ? hexToLinearVec3(color) : palColor(color)) : color;
   const cfg = {
     glaze: [1.0, 0.35, 0.0, 1.0],
@@ -495,7 +242,13 @@ function makeTube(pts: readonly (readonly [number, number, number])[], radius: n
   return new THREE.TubeGeometry(curve, segs, radius, radialSegs, false);
 }
 
-function addPart(group: THREE.Group, geo: THREE.BufferGeometry, mat: THREE.Material, pos?: readonly [number, number, number], rot?: readonly [number, number, number]): THREE.Mesh {
+function addPart(
+  group: THREE.Group,
+  geo: THREE.BufferGeometry,
+  mat: THREE.Material,
+  pos?: readonly [number, number, number],
+  rot?: readonly [number, number, number],
+): THREE.Mesh {
   const m = new THREE.Mesh(geo, mat);
   if (pos) m.position.set(pos[0], pos[1], pos[2]);
   if (rot) m.rotation.set(rot[0], rot[1], rot[2]);
@@ -665,7 +418,6 @@ export function buildArenaDressing(arenaId: ArenaId, matcap: THREE.Texture): THR
     case ArenaId.Willow: {
       const blue = ceramicMat(matcap, 'willow_wash', 'glaze');
       const white = ceramicMat(matcap, 'willow_glaze', 'glaze');
-      // Arched bridge in back Z
       for (const zOff of [-0.75, 0.75]) {
         addPart(g, makeTube([[-3, 2.5, zOff], [-1.5, 2.92, zOff], [0, 3.05, zOff], [1.5, 2.92, zOff], [3, 2.5, zOff]], 0.11, 10, 6), blue);
       }
@@ -673,7 +425,6 @@ export function buildArenaDressing(arenaId: ArenaId, matcap: THREE.Texture): THR
         const y = 2.46 + 0.55 * (1 - (i / 3) ** 2);
         addPart(g, new THREE.BoxGeometry(0.36, 0.14, 1.4), white, [i * 0.85, y, 0]);
       }
-      // Bonsai willow tree right
       addPart(g, makeTube([[10.5, 0.2, 1.3], [10.0, 2.0, 1.1], [9.6, 3.3, 0.8], [10.3, 4.8, 0.9]], 0.28, 8, 6), blue);
       addPart(g, makeTube([[9.8, 3.1, 0.7], [8.5, 2.95, 0.1], [7.0, 2.9, 0.0]], 0.18, 6, 6), blue);
       const foliagePos: readonly (readonly [number, number])[] = [[7.4, 2.5], [8.6, 2.4], [9.8, 4.2], [10.6, 4.4]];
@@ -688,7 +439,6 @@ export function buildArenaDressing(arenaId: ArenaId, matcap: THREE.Texture): THR
       const gilt = ceramicMat(matcap, 'gilt', 'gilt');
       addPart(g, makeLathe([[0, -2.2], [1.5, -2.1], [0.55, -0.6], [0.45, 3.0], [0.42, 6.2], [0.34, 8.8], [0, 9.6]], 14), cream, [0, 0, 1.4]);
       addPart(g, new THREE.TorusGeometry(0.65, 0.12, 6, 12), rose, [0, 2.3, 1.4], [Math.PI / 2, 0, 0]);
-      // Background pouring teapot
       const pot = new THREE.Group();
       addPart(pot, makeLathe([[0, 0], [1.2, 0], [2.2, 1.8], [1.4, 3.6], [0.4, 4.5], [0, 4.7]], 14), cream);
       addPart(pot, makeTube([[-2.0, 1.5, 0], [-3.4, 2.2, 0], [-4.1, 3.4, 0]], 0.34, 6, 6), cream);

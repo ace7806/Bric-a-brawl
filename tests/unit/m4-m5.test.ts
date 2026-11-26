@@ -1,9 +1,25 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
+import { getElementalFighter } from '@client/elemental-roster';
+import {
+  applyElementalFinish,
+  createElementalToonMaterial,
+  ensureSmoothOutlineNormals,
+  getFallbackBlackTexture,
+  getFallbackWhiteTexture,
+} from '@client/elemental-toon-material';
 import { GlazeFinish, KeyAction } from '@client/enums';
 import { applyGlazeFinish, buildFighterPalette, createGlazeMaterial, hexToLinearVec3 } from '@client/glaze-material';
 import { formatKeyCode, InputCollector } from '@client/input';
-import { applyFighterPose, createFighterAnimRuntime, type BoneSlot, type FighterBoneRig } from '@client/poses';
+import {
+  applyElementalPose,
+  createFighterAnimRuntime,
+  moveIdToClipName,
+  selectElementalClip,
+  type ElementalFighterRig,
+} from '@client/poses';
 import {
   ALL_APPRAISAL_IDS, APPRAISAL_SPECS, AppraisalId, DEFAULT_LOT_NAMES, PROFILE_STORAGE_KEY,
   ROOM_ADJECTIVES, ROOM_SUFFIXES, ROOM_VESSELS, createDefaultPlayerProfile, evaluateRoundProgression,
@@ -11,6 +27,7 @@ import {
   savePlayerProfile, type RoundTelemetryForAppraisal,
 } from '@client/progression';
 import type { SnapshotFighter } from '@net/codec';
+import { getFighterSpec } from '@sim/data';
 import { ALL_FIGHTER_IDS, FighterFlag, FighterId, FighterState, GadgetId, InputBit, InputDir, KoCause, MoveId, NestaSize } from '@sim/enums';
 import { decodeInputDir } from '@sim/input';
 
@@ -34,18 +51,51 @@ const baseTelemetry = (over: Partial<RoundTelemetryForAppraisal> = {}): RoundTel
   ...over,
 });
 
-function makeSlot(y = 0): BoneSlot {
-  const bone = new THREE.Bone();
-  bone.position.set(0, y, 0);
-  return { bone, restPos: bone.position.clone(), restQuat: bone.quaternion.clone() };
-}
+const ALL_CLIP_NAMES = [
+  'Idle', 'Walk', 'Run', 'Dash', 'Skid', 'JumpSquat', 'Jump', 'Fall', 'LandingLag',
+  'Guard', 'Hitstun', 'Tumble', 'Roll', 'SpotDodge', 'AirDodge', 'ChaseDodge',
+  'LedgeHang', 'LedgeGetup', 'ChargingHeavy', 'LedgeAtk',
+  'Jab1', 'Jab2', 'Jab3', 'Ftilt', 'Utilt', 'Dtilt', 'DashAtk',
+  'Fheavy', 'Uheavy', 'Dheavy', 'Nair', 'Fair', 'Bair', 'Uair', 'Dair',
+  'Grab', 'Fthrow', 'Bthrow', 'Uthrow', 'Dthrow', 'Nspec', 'Sspec', 'Uspec', 'Dspec',
+] as const;
 
-const makeRig = (fighterId: FighterId): FighterBoneRig => ({
-  fighterId, body: makeSlot(0.5),
-  lid: makeSlot(0.9), head: makeSlot(0.8), hat: makeSlot(1.1), rod: makeSlot(0.6),
-  handF: makeSlot(0.4), handB: makeSlot(0.4), footF: makeSlot(0), footB: makeSlot(0),
-  hoofFL: makeSlot(0), hoofFR: makeSlot(0), hoofBL: makeSlot(0), hoofBR: makeSlot(0),
-});
+function makeElementalRig(fighterId: FighterId): ElementalFighterRig {
+  const fxGroup = new THREE.Group();
+  const modelGroup = new THREE.Group();
+  fxGroup.add(modelGroup);
+  const rootBone = new THREE.Bone();
+  rootBone.name = 'Root';
+  modelGroup.add(rootBone);
+  const skinnedMesh = new THREE.SkinnedMesh(new THREE.BoxGeometry(0.4, 1.2, 0.4), new THREE.MeshBasicMaterial());
+  modelGroup.add(skinnedMesh);
+
+  const mixer = new THREE.AnimationMixer(modelGroup);
+  const clips = new Map<string, THREE.AnimationClip>();
+  const actions = new Map<string, THREE.AnimationAction>();
+  for (const name of ALL_CLIP_NAMES) {
+    const track = new THREE.VectorKeyframeTrack('Root.position', [0, 0.6], [0, 0, 0, 0, 0.1, 0]);
+    clips.set(name, new THREE.AnimationClip(name, 0.6, [track]));
+  }
+  return {
+    fighterId,
+    fxGroup,
+    modelGroup,
+    mixer,
+    clips,
+    actions,
+    skinnedMesh,
+    outlineMesh: null,
+    rootBone,
+    handR: null,
+    handL: null,
+    weaponR: null,
+    headBone: null,
+    activeActionName: null,
+    activeAction: null,
+    lastEvalFrame: -1,
+  };
+}
 
 const makeSnap = (over: Partial<SnapshotFighter> = {}): SnapshotFighter => ({
   slot: 0, x: 0, y: 0, vx: 3.5, vy: 1.5,
@@ -145,7 +195,7 @@ describe('M5 progression & appraisals (src/client/progression.ts)', () => {
   });
 });
 
-describe('M4 GlazeMaterial math & palettes (src/client/glaze-material.ts)', () => {
+describe('M4 GlazeMaterial & ElementalToonMaterial shaders', () => {
   it('converts sRGB hex colors accurately to linear Vec3 [0..1]', () => {
     expect(hexToLinearVec3('#000000').toArray()).toEqual([0, 0, 0]);
     const white = hexToLinearVec3('#FFFFFF');
@@ -168,8 +218,12 @@ describe('M4 GlazeMaterial math & palettes (src/client/glaze-material.ts)', () =
     expect(pal[2]!.distanceTo(hexToLinearVec3('#E3A72F'))).toBeLessThan(1e-6);
   });
 
-  it('applies all 13 GlazeFinish presets with finite shader uniforms', () => {
+  it('applies all 13 GlazeFinish presets with finite shader uniforms on GlazeMaterial and ElementalToonMaterial', () => {
     const mat = createGlazeMaterial({ matcap: new THREE.Texture(), usePaletteAttr: true });
+    const toonMat = createElementalToonMaterial({
+      albedoMap: getFallbackWhiteTexture(),
+      emissiveMap: getFallbackBlackTexture(),
+    });
     const finishes = Object.values(GlazeFinish).filter((v): v is GlazeFinish => typeof v === 'number');
     expect(finishes).toHaveLength(13);
     for (const finish of finishes) {
@@ -179,35 +233,94 @@ describe('M4 GlazeMaterial math & palettes (src/client/glaze-material.ts)', () =
         expect(Number.isFinite(val)).toBe(true);
       }
       expectFiniteVec3(u.uGlazeTint.value);
+
+      applyElementalFinish(toonMat, finish);
+      const tu = toonMat.uniforms;
+      for (const val of [tu.uCrack.value, tu.uGilt.value, tu.uLustre.value, tu.uMatte.value, tu.uKintsugi.value]) {
+        expect(Number.isFinite(val)).toBe(true);
+      }
+      expectFiniteVec3(tu.uGlazeTint.value);
+    }
+  });
+
+  it('computes unit-length averaged smooth outline normals across hard-creased corners', () => {
+    const box = new THREE.BoxGeometry(1, 1, 1);
+    ensureSmoothOutlineNormals(box);
+    const attr = box.getAttribute('aSmoothNormal') as THREE.BufferAttribute;
+    expect(attr).toBeDefined();
+    expect(attr.count).toBe(box.getAttribute('position').count);
+    for (let i = 0; i < attr.count; i++) {
+      const nx = attr.getX(i);
+      const ny = attr.getY(i);
+      const nz = attr.getZ(i);
+      const len = Math.hypot(nx, ny, nz);
+      expect(len).toBeCloseTo(1, 4);
+      // Every box corner normal averages 3 orthogonal face normals -> |component| = 1/sqrt(3)
+      expect(Math.abs(nx)).toBeCloseTo(Math.SQRT1_2 * Math.sqrt(2 / 3), 3);
     }
   });
 });
 
-describe('M4 procedural pose tables & 6 life layers (src/client/poses.ts)', () => {
+describe('Elemental 60fps skeletal pose engine & Gate V4 clip coverage (src/client/poses.ts)', () => {
   const states: readonly FighterState[] = [
-    FighterState.Idle, FighterState.Run, FighterState.JumpSquat, FighterState.Airborne,
-    FighterState.Attack, FighterState.Guard, FighterState.Parry, FighterState.Tumble, FighterState.LedgeHang,
+    FighterState.Idle, FighterState.Walk, FighterState.Run, FighterState.Dash, FighterState.Skid,
+    FighterState.JumpSquat, FighterState.Airborne, FighterState.LandingLag, FighterState.Attack,
+    FighterState.ChargingHeavy, FighterState.Guard, FighterState.Parry, FighterState.Hitstun,
+    FighterState.Tumble, FighterState.Roll, FighterState.SpotDodge, FighterState.AirDodge,
+    FighterState.Grabbing, FighterState.LedgeHang, FighterState.LedgeGetup, FighterState.Helpless,
   ];
-  const moves: readonly MoveId[] = [MoveId.Jab1, MoveId.Fheavy, MoveId.Uspec, MoveId.Sspec, MoveId.Dspec, MoveId.Nspec];
+  const moves: readonly MoveId[] = Object.values(MoveId).filter((v): v is MoveId => typeof v === 'number' && v !== MoveId.None);
 
-  it.each(ALL_FIGHTER_IDS)('applies finite bone transforms for FighterId %i across states, moves, and hitstop', (fid) => {
-    const rig = makeRig(fid);
+  it.each(ALL_FIGHTER_IDS)('applies finite rig transforms for FighterId %i across all states, moves, and hitstop', (fid) => {
+    const rig = makeElementalRig(fid);
     const anim = createFighterAnimRuntime(fid);
-    const slots = [rig.body, rig.lid!, rig.head!, rig.hat!, rig.rod!, rig.handF!, rig.handB!, rig.footF!, rig.footB!, rig.hoofFL!, rig.hoofFR!, rig.hoofBL!, rig.hoofBR!];
 
     for (const state of states) {
       for (const activeMove of state === FighterState.Attack ? moves : [MoveId.None]) {
         for (const hitstop of [false, true]) {
-          applyFighterPose(rig, anim, makeSnap({ state, activeMove }), 1 / 60, 1.25, state !== FighterState.Tumble, state !== FighterState.Airborne, hitstop);
-          expectFiniteVec3(rig.body.bone.scale);
-          for (const s of slots) {
-            expectFiniteVec3(s.bone.position);
-            const q = s.bone.quaternion;
-            expect(Number.isFinite(q.x) && Number.isFinite(q.y) && Number.isFinite(q.z) && Number.isFinite(q.w)).toBe(true);
-          }
+          applyElementalPose(rig, anim, makeSnap({ state, activeMove }), 1 / 60, 1.25, state !== FighterState.Tumble, state !== FighterState.Airborne, hitstop);
+          expectFiniteVec3(rig.fxGroup.position);
+          expectFiniteVec3(rig.fxGroup.scale);
+          expect(Number.isFinite(rig.modelGroup.rotation.y)).toBe(true);
+          expect(rig.activeActionName).not.toBeNull();
         }
       }
     }
+  });
+
+  it.each(ALL_FIGHTER_IDS)('Gate V4: exported GLB manifest & binary for Elemental Fighter %i has 100% clip coverage and exact 60fps sim-tick timing', (fid) => {
+    const elem = getElementalFighter(fid);
+    const metaPath = resolve(import.meta.dirname, '../../public/assets', `${elem.slug}.json`);
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as { clips: readonly string[] };
+    const clipSet = new Set(meta.clips);
+
+    for (const moveId of moves) {
+      const clipName = moveIdToClipName(moveId);
+      expect(clipSet.has(clipName), `${elem.slug}.json missing MoveId clip "${clipName}"`).toBe(true);
+    }
+
+    const stateSnapshots: readonly SnapshotFighter[] = [
+      ...states.map((state) => makeSnap({ state, activeMove: state === FighterState.Attack ? MoveId.Fheavy : MoveId.None, vy: 2.0, vx: 2.0 })),
+      makeSnap({ state: FighterState.Airborne, vy: -3.0 }),
+      makeSnap({ state: FighterState.AirDodge, vx: 16.0, vy: 0 }),
+    ];
+    for (const snap of stateSnapshots) {
+      const sel = selectElementalClip(snap, 0.25);
+      expect(clipSet.has(sel.clipName), `${elem.slug}.json missing state clip "${sel.clipName}" (state=${snap.state})`).toBe(true);
+    }
+
+    // Parse binary GLB JSON chunk and assert Fheavy clip duration matches 60fps sim total frames
+    const glbBuf = readFileSync(resolve(import.meta.dirname, '../../public/assets', `${elem.slug}.glb`));
+    const jsonLen = glbBuf.readUInt32LE(12);
+    const gltf = JSON.parse(glbBuf.subarray(20, 20 + jsonLen).toString('utf8')) as {
+      animations: { name: string; samplers: { input: number }[] }[];
+      accessors: { max: number[] }[];
+    };
+    const fhAnim = gltf.animations.find((a) => a.name === 'Fheavy');
+    expect(fhAnim).toBeDefined();
+    const fhMaxSec = Math.max(...fhAnim!.samplers.map((s) => gltf.accessors[s.input]!.max[0]!));
+    const expectedSec = getFighterSpec(fid).moves.get(MoveId.Fheavy)!.total / 60;
+    expect(fhMaxSec).toBeCloseTo(expectedSec, 2);
   });
 });
 

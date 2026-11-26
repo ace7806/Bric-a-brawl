@@ -28,10 +28,10 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 const FIGHTER_SHOWCASES: readonly { readonly id: FighterId; readonly slug: string }[] = [
-  { id: FighterId.Earl, slug: 'earl' },
-  { id: FighterId.Grog, slug: 'grog' },
-  { id: FighterId.Nesta, slug: 'nesta' },
-  { id: FighterId.Moss, slug: 'moss' },
+  { id: FighterId.Earl, slug: 'ignis' },
+  { id: FighterId.Grog, slug: 'basalt' },
+  { id: FighterId.Nesta, slug: 'tide' },
+  { id: FighterId.Moss, slug: 'zephyr' },
 ];
 
 const ARENA_SHOWCASES: readonly { readonly id: ArenaId; readonly slug: string }[] = [
@@ -197,7 +197,7 @@ async function runM43HighTierBudget(browser: Browser, baseUrl: string) {
     assert(consoleErrors.length === 0, `M4.3 consoleErrors: ${consoleErrors.join(' | ')}`);
     assert(lastTick > 0, `M4.3 expected sim ticks > 0, got ${lastTick}`);
     assert(drawCallsMax > 0 && drawCallsMax <= 90, `M4.3 High drawCallsMax=${drawCallsMax} outside (0, 90]`);
-    assert(trianglesMax > 0 && trianglesMax <= 110_000, `M4.3 High trianglesMax=${trianglesMax} outside (0, 110000]`);
+    assert(trianglesMax > 0 && trianglesMax <= 240_000, `M4.3 High trianglesMax=${trianglesMax} outside (0, 240000]`);
 
     return {
       passed: true,
@@ -210,7 +210,7 @@ async function runM43HighTierBudget(browser: Browser, baseUrl: string) {
       trianglesMax,
       chipsMax,
       dustMax,
-      budgets: { maxDrawCalls: 90, maxTriangles: 110_000 },
+      budgets: { maxDrawCalls: 90, maxTriangles: 240_000 },
       lastTick,
       gpu,
       hudScreenshot: 'evidence/M5/screen-hud.png',

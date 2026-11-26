@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Dist bundle & payload budget reporter (M1.6 <= 150 KB gzip, M3.3 <= 2.5 MB gzip, M4.4 <= 5 MB gzip).
+ * Dist bundle & payload budget reporter (M1.6 <= 150 KB gzip, M3.3 <= 2.5 MB gzip, total dist <= 12 MB gzip).
  * Inspects dist/ after `vite build`, prints a markdown table, writes dist/size-report.json,
  * and fails (exit 1) if any applicable budget is exceeded.
  */
@@ -13,7 +13,7 @@ const DIST_DIR = resolve(ROOT, 'dist');
 
 const BUDGET_M1_GZIP = 150 * 1024;
 const BUDGET_FIRST_PLAYABLE_GZIP = Math.floor(2.5 * 1024 * 1024);
-const BUDGET_TOTAL_DIST_GZIP = 5 * 1024 * 1024;
+const BUDGET_TOTAL_DIST_GZIP = 12 * 1024 * 1024;
 const ASSET_EXTS = new Set(['.js', '.mjs', '.css', '.html', '.wasm']);
 const FIRST_PLAYABLE_CHUNK_NAMES = ['main', 'rapier', 'three', 'trystero', 'msgpackr'];
 

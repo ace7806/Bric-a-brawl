@@ -7,9 +7,16 @@ import {
   HitTier,
   selectSwingSound,
 } from '@client/combat-feel';
+import { getElementalFighter } from '@client/elemental-roster';
 import { SoundId } from '@client/enums';
 import { InputCollector } from '@client/input';
-import { applyFighterPose, createFighterAnimRuntime, type BoneSlot, type FighterBoneRig } from '@client/poses';
+import {
+  applyElementalPose,
+  createFighterAnimRuntime,
+  FACING_LEFT_YAW,
+  FACING_RIGHT_YAW,
+  type ElementalFighterRig,
+} from '@client/poses';
 import { HostSimulation } from '@host/engine';
 import type { SnapshotData, SnapshotFighter } from '@net/codec';
 import { RemoteInterpolator } from '@net/sync';
@@ -35,34 +42,45 @@ import { encodeInputMask } from '@sim/input';
 import { tape } from '../support/inputs';
 import { createMatch, disposeAllWorlds, ensurePhysics, positionPair, runTape } from '../support/world';
 
-function makeSlot(x = 0, y = 0, z = 0): BoneSlot {
-  const bone = new THREE.Bone();
-  bone.position.set(x, y, z);
-  return { bone, restPos: bone.position.clone(), restQuat: bone.quaternion.clone() };
-}
+const TEST_CLIP_NAMES = [
+  'Idle', 'Run', 'Jump', 'Fall', 'LandingLag', 'ChargingHeavy', 'Hitstun', 'Tumble',
+  'Jab1', 'Jab2', 'Jab3', 'Ftilt', 'Fheavy', 'Uspec',
+] as const;
 
-function makeTestRig(fighterId: FighterId): FighterBoneRig {
-  const body = makeSlot(0, 0, 0);
-  const child = (x: number, y: number, z: number): BoneSlot => {
-    const s = makeSlot(x, y, z);
-    body.bone.add(s.bone);
-    return s;
-  };
+function makeTestRig(fighterId: FighterId): ElementalFighterRig {
+  const fxGroup = new THREE.Group();
+  const modelGroup = new THREE.Group();
+  fxGroup.add(modelGroup);
+  const rootBone = new THREE.Bone();
+  rootBone.name = 'Root';
+  modelGroup.add(rootBone);
+  const skinnedMesh = new THREE.SkinnedMesh(new THREE.BoxGeometry(0.4, 1.4, 0.4), new THREE.MeshBasicMaterial());
+  modelGroup.add(skinnedMesh);
+
+  const mixer = new THREE.AnimationMixer(modelGroup);
+  const clips = new Map<string, THREE.AnimationClip>();
+  const actions = new Map<string, THREE.AnimationAction>();
+  for (const name of TEST_CLIP_NAMES) {
+    const track = new THREE.VectorKeyframeTrack('Root.position', [0, 1.0], [0, 0, 0, 0, 0.25, 0]);
+    clips.set(name, new THREE.AnimationClip(name, 1.0, [track]));
+  }
   return {
     fighterId,
-    body,
-    lid: fighterId === FighterId.Earl ? child(0, 1.24, 0) : null,
-    head: fighterId === FighterId.Grog ? child(0.92, 1.14, 0) : null,
-    hat: fighterId === FighterId.Moss ? child(0, 1.07, 0) : null,
-    rod: fighterId === FighterId.Moss ? child(0.3, 0.5, 0.66) : null,
-    handF: fighterId !== FighterId.Grog ? child(0.2, 0.52, 0.72) : null,
-    handB: fighterId !== FighterId.Grog ? child(0.2, 0.52, -0.72) : null,
-    footF: fighterId === FighterId.Earl || fighterId === FighterId.Moss ? child(0.02, 0, 0.25) : null,
-    footB: fighterId === FighterId.Earl || fighterId === FighterId.Moss ? child(0.02, 0, -0.25) : null,
-    hoofFL: fighterId === FighterId.Grog ? child(0.56, 0, 0.33) : null,
-    hoofFR: fighterId === FighterId.Grog ? child(0.56, 0, -0.33) : null,
-    hoofBL: fighterId === FighterId.Grog ? child(-0.5, 0, 0.33) : null,
-    hoofBR: fighterId === FighterId.Grog ? child(-0.5, 0, -0.33) : null,
+    fxGroup,
+    modelGroup,
+    mixer,
+    clips,
+    actions,
+    skinnedMesh,
+    outlineMesh: null,
+    rootBone,
+    handR: null,
+    handL: null,
+    weaponR: null,
+    headBone: null,
+    activeActionName: null,
+    activeAction: null,
+    lastEvalFrame: -1,
   };
 }
 
@@ -271,103 +289,88 @@ describe('Smash Game Feel — Input Responsiveness, Sim Combat & Hitstop Sync', 
   });
 });
 
-describe('Smash Game Feel — Expressive Model Poses, Limb Pop, Hitlag Rattle & Feedback', () => {
+describe('Smash Game Feel — Elemental 60fps Skeletal Clips, Squash/Stretch, Hitlag Rattle & Feedback', () => {
   it.each(ALL_FIGHTER_IDS)(
-    'Gate F4: Fighter %i shows coiled windup -> forward active lunge & exaggerated striking-limb scale pop (>=1.25x)',
+    'Gate F4: Elemental Fighter %i locks 60fps skeletal clip time 1:1 to stateFrame, pops squash on active frames, and pivots +62° <-> -62° through front',
     (fid) => {
       const rig = makeTestRig(fid);
       const anim = createFighterAnimRuntime(0);
       const fheavy = getFighterSpec(fid).moves.get(MoveId.Fheavy)!;
+      const windupFrame = Math.max(1, Math.floor(fheavy.startup * 0.6));
+      const activeFrame = fheavy.startup + 1;
 
       // Sample Windup
-      applyFighterPose(
+      applyElementalPose(
         rig,
         anim,
-        makeSnap({ state: FighterState.Attack, activeMove: MoveId.Fheavy, stateFrame: Math.max(1, Math.floor(fheavy.startup * 0.6)) }),
+        makeSnap({ state: FighterState.Attack, activeMove: MoveId.Fheavy, stateFrame: windupFrame }),
         1 / 60,
         0.5,
         true,
         true,
         false,
       );
-      rig.body.bone.updateMatrixWorld(true);
-      const striker = fid === FighterId.Grog ? rig.head! : rig.handF!;
-      const windupBodyX = rig.body.bone.position.x;
-      const windupStrikerWorld = striker.bone.getWorldPosition(new THREE.Vector3());
+      const fheavyAction = rig.actions.get('Fheavy')!;
+      expect(rig.activeActionName).toBe('Fheavy');
+      expect(fheavyAction.time).toBeCloseTo(windupFrame / 60, 4);
 
-      // Sample Peak Active Frame
-      applyFighterPose(
+      // Sample Peak Active Frame -> action time locks to activeFrame/60 and active stretch pops
+      applyElementalPose(
         rig,
         anim,
-        makeSnap({ state: FighterState.Attack, activeMove: MoveId.Fheavy, stateFrame: fheavy.startup + 1 }),
+        makeSnap({ state: FighterState.Attack, activeMove: MoveId.Fheavy, stateFrame: activeFrame }),
         1 / 60,
         0.55,
         true,
         true,
         false,
       );
-      rig.body.bone.updateMatrixWorld(true);
-      const activeBodyX = rig.body.bone.position.x;
-      const activeStrikerWorld = striker.bone.getWorldPosition(new THREE.Vector3());
+      expect(fheavyAction.time).toBeCloseTo(activeFrame / 60, 4);
+      expect(rig.fxGroup.scale.y).toBeGreaterThan(1.01);
+      // Volume preservation: sx * sy * sz === 1
+      expect(rig.fxGroup.scale.x * rig.fxGroup.scale.y * rig.fxGroup.scale.z).toBeCloseTo(1.0, 4);
 
-      // Whole body must coil backward in windup and explode forward on active hit frame!
-      expect(windupBodyX).toBeLessThan(-0.15);
-      expect(activeBodyX).toBeGreaterThan(0.42);
-      expect(activeBodyX - windupBodyX).toBeGreaterThan(0.6);
+      // Landing from airborne triggers squash compression (scale.y < 0.95)
+      applyElementalPose(rig, anim, makeSnap({ state: FighterState.Airborne, vy: -3.0 }), 1 / 60, 0.6, true, false, false);
+      applyElementalPose(rig, anim, makeSnap({ state: FighterState.LandingLag, stateFrame: 0 }), 1 / 60, 0.62, true, true, false);
+      expect(rig.fxGroup.scale.y).toBeLessThan(0.95);
 
-      // Striking part (handF for Earl/Nesta/Moss, head for Grog) surges in world space, pops >= 1.25x,
-      // and stays cleanly at chest/face height above the floor (never sinking to y~0)!
-      expect(activeStrikerWorld.x - windupStrikerWorld.x).toBeGreaterThan(0.9);
-      expect(activeStrikerWorld.y).toBeGreaterThanOrEqual(0.45);
-      expect(striker.bone.scale.x).toBeGreaterThanOrEqual(1.25);
-
-      // Anatomical cohesion: Grog's head stays attached to neck, Earl's lid stays over crown, Moss's rod stays above floor!
-      if (fid === FighterId.Grog && rig.head) {
-        expect(Math.abs(rig.head.bone.position.x - rig.head.restPos.x)).toBeLessThanOrEqual(0.32);
+      // Turning left pivots cleanly from +62 deg toward -62 deg through 0 deg (camera-front)
+      expect(rig.modelGroup.rotation.y).toBeCloseTo(FACING_RIGHT_YAW, 2);
+      for (let i = 0; i < 20; i++) {
+        applyElementalPose(rig, anim, makeSnap({ state: FighterState.Idle }), 1 / 60, 0.7 + i / 60, false, true, false);
       }
-      if (fid === FighterId.Earl && rig.lid) {
-        expect(Math.abs(rig.lid.bone.position.x - rig.lid.restPos.x)).toBeLessThanOrEqual(0.2);
-      }
-      if (fid === FighterId.Moss && rig.rod) {
-        const rodTipLocal = new THREE.Vector3(1.42, 1.18, 0);
-        const rodTipWorld = rodTipLocal.applyMatrix4(rig.rod.bone.matrixWorld);
-        expect(rodTipWorld.y).toBeGreaterThanOrEqual(0.4);
-      }
+      expect(rig.modelGroup.rotation.y).toBeCloseTo(FACING_LEFT_YAW, 2);
     },
   );
 
-  it('Gate F4: Jab1, Jab2, Jab3 produce distinct choreography, ChargingHeavy shivers, and victim hitstop rattles strongly', () => {
+  it('Gate F4: Jab1/Jab2/Jab3 dispatch distinct baked clips, ChargingHeavy shivers, and victim hitstop freezes clip clock while rattling strongly', () => {
     const rig = makeTestRig(FighterId.Earl);
     const anim = createFighterAnimRuntime(0);
 
-    const sampleJab = (moveId: MoveId) => {
+    for (const [moveId, expectedClip] of [
+      [MoveId.Jab1, 'Jab1'],
+      [MoveId.Jab2, 'Jab2'],
+      [MoveId.Jab3, 'Jab3'],
+    ] as const) {
       const st = getFighterSpec(FighterId.Earl).moves.get(moveId)!.startup;
-      applyFighterPose(rig, anim, makeSnap({ state: FighterState.Attack, activeMove: moveId, stateFrame: st + 1 }), 1 / 60, 0.5, true, true, false);
-      return {
-        handFX: rig.handF!.bone.position.x,
-        handBX: rig.handB!.bone.position.x,
-        bodyX: rig.body.bone.position.x,
-      };
-    };
-    const j1 = sampleJab(MoveId.Jab1);
-    const j2 = sampleJab(MoveId.Jab2);
-    const j3 = sampleJab(MoveId.Jab3);
-    // Jab1 leads with front hand, Jab2 switches to back hand, Jab3 lunges further forward!
-    expect(j1.handFX).toBeGreaterThan(j1.handBX + 0.5);
-    expect(j2.handBX).toBeGreaterThan(j2.handFX + 0.5);
-    expect(j3.bodyX).toBeGreaterThan(j1.bodyX + 0.15);
+      applyElementalPose(rig, anim, makeSnap({ state: FighterState.Attack, activeMove: moveId, stateFrame: st + 1 }), 1 / 60, 0.5, true, true, false);
+      expect(rig.activeActionName).toBe(expectedClip);
+      expect(rig.actions.get(expectedClip)!.time).toBeCloseTo((st + 1) / 60, 4);
+    }
 
     // ChargingHeavy shivers visibly across frames
-    applyFighterPose(rig, anim, makeSnap({ state: FighterState.ChargingHeavy, stateFrame: 30 }), 1 / 60, 1.0, true, true, false);
-    const c1 = rig.body.bone.position.x;
-    applyFighterPose(rig, anim, makeSnap({ state: FighterState.ChargingHeavy, stateFrame: 32 }), 1 / 60, 1.033, true, true, false);
-    const c2 = rig.body.bone.position.x;
+    applyElementalPose(rig, anim, makeSnap({ state: FighterState.ChargingHeavy, stateFrame: 30 }), 1 / 60, 1.0, true, true, false);
+    const c1 = rig.fxGroup.position.x;
+    applyElementalPose(rig, anim, makeSnap({ state: FighterState.ChargingHeavy, stateFrame: 32 }), 1 / 60, 1.033, true, true, false);
+    const c2 = rig.fxGroup.position.x;
     expect(Math.abs(c2 - c1)).toBeGreaterThan(0.02);
 
-    // Victim hitstop rattle produces strong oscillation (>= 0.08 u peak-to-peak)
+    // Victim hitstop freezes loopTimeSec AND rattles fxGroup strongly (>= 0.14 u peak-to-peak)
+    const loopClockBefore = anim.loopTimeSec;
     const xs: number[] = [];
     for (let i = 0; i < 6; i++) {
-      applyFighterPose(
+      applyElementalPose(
         rig,
         anim,
         makeSnap({ state: FighterState.Hitstun, stateFrame: 1, hitstopFrames: 8 - i }),
@@ -377,13 +380,14 @@ describe('Smash Game Feel — Expressive Model Poses, Limb Pop, Hitlag Rattle & 
         true,
         true,
       );
-      xs.push(rig.body.bone.position.x);
+      xs.push(rig.fxGroup.position.x);
     }
+    expect(anim.loopTimeSec).toBe(loopClockBefore);
     const span = Math.max(...xs) - Math.min(...xs);
     expect(span).toBeGreaterThanOrEqual(0.14);
   });
 
-  it('Gate F6: Hit contact spawns on defender (not behind attacker), slash arcs & swing whooshes cover all melee moves', () => {
+  it('Gate F6: Hit contact spawns on defender (not behind attacker), elemental slash arcs & swing whooshes cover all melee moves', () => {
     const atk = createFighter(0, FighterId.Earl, TeamId.None, -2.0, 0, 3);
     const def = createFighter(1, FighterId.Grog, TeamId.None, 1.0, 0, 3);
     atk.flags = FighterFlag.FacingRight | FighterFlag.Grounded;
@@ -398,13 +402,14 @@ describe('Smash Game Feel — Expressive Model Poses, Limb Pop, Hitlag Rattle & 
     expect(classifyHitImpact(15, FighterId.Earl, MoveId.Fheavy, 16)).toBe(HitTier.Heavy);
     expect(classifyHitImpact(15, FighterId.Earl, MoveId.Fheavy, 28)).toBe(HitTier.KillSpark);
 
-    // Every melee attack has both a swing whoosh cue and a finite 3D slash arc
+    // Every melee attack has both a swing whoosh cue and a finite 3D elemental slash arc
     const meleeMoves: readonly MoveId[] = [
       MoveId.Jab1, MoveId.Jab2, MoveId.Jab3, MoveId.Ftilt, MoveId.Utilt, MoveId.Dtilt,
       MoveId.Dash, MoveId.Fheavy, MoveId.Uheavy, MoveId.Dheavy,
       MoveId.Nair, MoveId.Fair, MoveId.Bair, MoveId.Uair, MoveId.Dair,
     ];
     for (const fid of ALL_FIGHTER_IDS) {
+      const elem = getElementalFighter(fid);
       const f = createFighter(0, fid, TeamId.None, 0, 0, 3);
       f.flags = FighterFlag.FacingRight | FighterFlag.Grounded;
       for (const mid of meleeMoves) {
@@ -417,6 +422,10 @@ describe('Smash Game Feel — Expressive Model Poses, Limb Pop, Hitlag Rattle & 
         const slash = buildSlashForMove(f, '#24459A');
         expect(slash, `Slash arc missing for fighter ${fid} move ${mid}`).not.toBeNull();
         expect(Number.isFinite(slash!.x) && Number.isFinite(slash!.y) && slash!.radius > 0.3).toBe(true);
+        expect(slash!.colorHex).toMatch(/^#[0-9a-f]{6}$/i);
+        if (mid === MoveId.Fheavy || mid === MoveId.Uheavy || mid === MoveId.Dheavy) {
+          expect(slash!.colorHex).toBe(elem.heavySlashHex);
+        }
       }
     }
   });

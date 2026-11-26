@@ -6,6 +6,7 @@ import { getArenaSpec, getFighterSpec, getGameData } from '@sim/data';
 import { ALL_ARENA_IDS, ALL_FIGHTER_IDS, FighterId, GadgetId, InputBit, InputDir, MatchMode } from '@sim/enums';
 import { useState } from 'preact/hooks';
 import { GlazeFinish, ScreenId } from '../enums';
+import { getElementalFighter } from '../elemental-roster';
 import { ALL_APPRAISAL_IDS, APPRAISAL_SPECS, type AppraisalId, type FighterProvenance } from '../progression';
 import type { PerfReport } from '../quality';
 import {
@@ -25,12 +26,6 @@ const MAX_BOTS = 3;
 const BOT_LABEL: Record<BotKind, string> = {
   [BotKind.Masher]: 'Masher', [BotKind.Tape]: 'Tape', [BotKind.Chaser]: 'Easy', [BotKind.Brawler]: 'Medium',
   [BotKind.Sharp]: 'Hard', [BotKind.ParryBot]: 'Parry', [BotKind.BlockBot]: 'Block', [BotKind.Runner]: 'Runner',
-};
-const FIGHTER_TRICKS: Record<FighterId, string> = {
-  [FighterId.Earl]: 'Piping — cancel normals into steam specials and spend gilt for extra burst.',
-  [FighterId.Grog]: 'Stampede — barrel straight through rivals, carrying the first one you catch.',
-  [FighterId.Nesta]: 'Nesting Pop — shed down a shell (Big → Mid → Small) to slip out of danger.',
-  [FighterId.Moss]: 'Vine Snare — cast your fishing rod to yank rivals or rubble from afar.',
 };
 
 function diagCodeForState(s: ConnectionState): string {
@@ -99,7 +94,7 @@ function TitleScreen({
           <div class="caps">The Mantel Auction Rooms<br />2 to 8 players · one link</div>
         </div>
         <h1 class="display title-logo">BRIC-A-<br />BRAWL</h1>
-        <p class="serif title-sub">A party fighter for ornaments with grudges.</p>
+        <p class="serif title-sub">Four elemental fighters · destructible arenas · Smash-style brawls.</p>
         <hr class="rule" />
         <div class="title-actions">
           <div class="title-primary-row">
@@ -145,6 +140,7 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
   readonly takenBySlot: ReadonlyMap<number, number>; readonly callbacks: UiCallbacks; readonly onBack: () => void;
 }) {
   const spec = getFighterSpec(fighterId); const s = spec.stats;
+  const elem = getElementalFighter(fighterId);
   const prov = provenance[fighterId];
   const unlockedSet = new Set(unlockedAppraisals);
   const pip = (v: number) => Math.min(5, Math.max(1, Math.round(v)));
@@ -161,29 +157,43 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
         <div class="catalogue-list">
           <div class="catalogue-list-head">
             <div>
-              <div class="caps">The Catalogue</div>
-              <div class="display" style="font-size:28px">Choose a Lot</div>
+              <div class="caps">Elemental Roster</div>
+              <div class="display" style="font-size:28px">Choose Fighter</div>
             </div>
             <button type="button" class="btn small primary" onClick={onBack}>Done</button>
           </div>
           <hr class="rule2" />
           <div class="catalogue-lots">
             {ALL_FIGHTER_IDS.map((fid, i) => {
-              const fs = getFighterSpec(fid);
+              const el = getElementalFighter(fid);
               return (
                 <button key={fid} type="button" data-fighter={fid} class={`lot-item${fid === fighterId ? ' sel' : ''}`} onClick={() => callbacks.onSelectFighter(fid)}>
-                  <div class="caps">{`Lot ${i + 1}`}</div>
-                  <div class="display" style="font-size:24px">{fs.name}</div>
-                  <div class="type" style="font-size:11px;color:var(--ink-soft);">{fs.role}</div>
+                  <img class="lot-portrait" src={el.portraitUrl} alt={el.name} style={{ borderColor: el.accentHex }} />
+                  <div class="lot-info">
+                    <div class="lot-meta">
+                      <span class="caps">{`Lot ${i + 1}`}</span>
+                      <span class="elem-badge" style={{ background: el.accentHex }}>{el.element}</span>
+                    </div>
+                    <div class="display lot-title">{el.name}</div>
+                    <div class="type lot-role">{el.title}</div>
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
         <div class="catalogue-detail">
-          <div class="caps">{`Lot ${ALL_FIGHTER_IDS.indexOf(fighterId) + 1} · ${spec.ornament}`}</div>
-          <div class="display catalogue-name">{spec.name}</div>
-          <div class="serif" style="font-style:italic;font-size:16px;margin-bottom:10px;">{`${spec.role} · Difficulty ${spec.difficulty}/3`}</div>
+          <div class="catalogue-hero">
+            <img class="catalogue-hero-portrait" src={elem.portraitUrl} alt={elem.name} style={{ borderColor: elem.accentHex }} />
+            <div class="catalogue-hero-meta">
+              <div class="lot-meta">
+                <span class="caps">{`Lot ${ALL_FIGHTER_IDS.indexOf(fighterId) + 1} · ${elem.title}`}</span>
+                <span class="elem-badge" style={{ background: elem.accentHex }}>{elem.element}</span>
+              </div>
+              <div class="display catalogue-name">{elem.name}</div>
+              <div class="serif" style="font-style:italic;font-size:16px;">{`${elem.role} · Difficulty ${spec.difficulty}/3`}</div>
+            </div>
+          </div>
           {prov.roundsPlayed > 0 && (
             <div class="provenance-line type">
               {`${prov.roundsPlayed} rounds · ${prov.wins} wins · ${prov.kos} KOs · Last exit: ${prov.mostEmbarrassingExit}`}
@@ -191,11 +201,11 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
           )}
           <div class="catalogue-trick">
             <div class="caps">Signature Move</div>
-            <div>{FIGHTER_TRICKS[fighterId]}</div>
+            <div>{elem.trick}</div>
           </div>
           <div style="margin-top:10px">{bars.map(([label, n]) => <div key={label} class="stat-bar"><span class="caps">{label}</span><span class="stat-pips"><Pips count={n} total={5} /></span></div>)}</div>
           <div style="margin-top:14px">
-            <div class="caps">Glaze colour</div>
+            <div class="caps">Player colour</div>
             <div class="swatch-row" style="margin-top:8px">
               {getGameData().palette.players.map((p, i) => {
                 const owner = takenBySlot.get(i); const taken = owner !== undefined && i !== colourIndex;
@@ -210,7 +220,7 @@ function CatalogueModal({ fighterId, colourIndex, equippedFinish, unlockedApprai
             </div>
           </div>
           <div style="margin-top:14px">
-            <div class="caps">{`Glaze finish (${unlockedFinishes.length}/${ALL_APPRAISAL_IDS.length} unlocked)`}</div>
+            <div class="caps">{`Battle finish (${unlockedFinishes.length}/${ALL_APPRAISAL_IDS.length} unlocked)`}</div>
             <div class="finish-chips">
               <button type="button" class={`chip${equippedFinish === GlazeFinish.Standard ? ' on' : ''}`} onClick={() => callbacks.onSelectGlazeFinish(GlazeFinish.Standard)}>
                 Standard
@@ -271,6 +281,7 @@ function LobbyScreen({
   const botCount = roster.slots.filter((s) => s.status === SlotStatus.Bot).length;
   const selfSlot = roster.slots.find((s) => s.peerId === selfPeerId);
   const selfFighter = selfSlot !== undefined ? selfSlot.fighterId : FighterId.Earl;
+  const selfElem = getElementalFighter(selfFighter);
   const selfColour = selfSlot !== undefined ? selfSlot.colourIndex : 0;
   const takenBySlot = new Map(roster.slots.map((s) => [s.colourIndex, s.slot + 1]));
   const active = roster.slots.filter((s) => s.status !== SlotStatus.Spectating);
@@ -336,7 +347,7 @@ function LobbyScreen({
                   <Disc slot={s.slot} colourIndex={s.colourIndex} />
                   <div class="lobby-row-name">
                     <div class="nm">{s.name}</div>
-                    <div class="sub">{`${getFighterSpec(s.fighterId).name}${s.peerId === roster.hostId ? ' · host' : ''}`}</div>
+                    <div class="sub">{`${getElementalFighter(s.fighterId).name}${s.peerId === roster.hostId ? ' · host' : ''}`}</div>
                   </div>
                   <div class="type" style="font-size:11px;color:var(--ink-soft);">{rttLabel}</div>
                   <div class="lobby-row-state">
@@ -395,8 +406,8 @@ function LobbyScreen({
           <div class="card paper lobby-dock-bar">
             <div class="lobby-dock-left">
               <button type="button" class="btn small" data-action="open-catalogue" onClick={() => { setOptionsOpen(false); onSetScreen(ScreenId.CharSelect); }}>
-                <span class="dock-swatch" style={{ background: playerColor(selfColour).hex }} />
-                <span>{getFighterSpec(selfFighter).name}</span>
+                <img class="dock-portrait" src={selfElem.portraitUrl} alt={selfElem.name} style={{ borderColor: playerColor(selfColour).hex }} />
+                <span>{selfElem.name}</span>
               </button>
               <button
                 type="button"
@@ -576,7 +587,7 @@ function ResultsScreen({ state, roomCode, photoUrl, photoBlob, sessionCardUrl, s
           <tbody>{state.rows.map((row) => (
             <tr key={row.slot}>
               <td class="n">{ord(row.place)}</td><td><Disc slot={row.slot} colourIndex={row.colourIndex} /></td>
-              <td><b>{row.name}</b><div class="sub">{`${getFighterSpec(row.fighterId).name} · ${row.note}`}</div></td>
+              <td><b>{row.name}</b><div class="sub">{`${getElementalFighter(row.fighterId).name} · ${row.note}`}</div></td>
               <td class="n">{row.kos}</td><td class="n">{row.falls}</td><td class="n">{`${Math.round(row.dealtDamage)}%`}</td>
               <td class="wins-pips"><Pips count={row.wins} total={winsGoal} /></td>
             </tr>

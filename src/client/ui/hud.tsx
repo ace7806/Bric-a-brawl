@@ -4,6 +4,7 @@ import { ArenaId, ChunkState, ErrorCode, FighterId, FighterState, GadgetId, Matc
 import type { CSSProperties } from 'preact';
 import { memo } from 'preact/compat';
 import { ScreenId } from '../enums';
+import { getElementalFighter } from '../elemental-roster';
 import type { FrameDataOverlayState, HudRenderState } from '../ui';
 import { playerColor, SoundIcon } from './modals';
 
@@ -52,7 +53,7 @@ const FIGHTER_STATE_LABEL: Record<FighterState, string> = {
   [FighterState.Teaspoon]: 'Teaspoon', [FighterState.Eliminated]: 'Eliminated', [FighterState.LandingLag]: 'LandLag', [FighterState.ChargingHeavy]: 'Charge',
 };
 const nestaSizeLabel = (s: NestaSize): string =>
-  s === NestaSize.Big ? 'Big' : s === NestaSize.Mid ? 'Mid' : s === NestaSize.Small ? 'Small' : assertNever(s, 'nestaSizeLabel');
+  s === NestaSize.Big ? 'Swell' : s === NestaSize.Mid ? 'Flow' : s === NestaSize.Small ? 'Mist' : assertNever(s, 'nestaSizeLabel');
 
 const CB_SHAPES = ['◆', '●', '▲', '■', '★', '✚', '⬟', '✦'] as const;
 
@@ -77,7 +78,7 @@ function FrameDataPanel({ fd }: { readonly fd: FrameDataOverlayState }) {
     ['moveFrame', m ? String(fd.moveFrame) : '0'], ['onBlock', m && m.onBlock !== null ? `${m.onBlock > 0 ? '+' : ''}${m.onBlock}` : '—'],
     ['damage', `${fd.damage.toFixed(1)}%`], ['state', FIGHTER_STATE_LABEL[fd.state]],
     ['gilt', `${Math.round(fd.gilt)} / ${getGameData().tuning.gilt.max}`],
-    ['special', fd.fighterId === FighterId.Nesta ? `Nesta: ${nestaSizeLabel(fd.nestaSize)}` : `Piping: ${fd.piping ? 'ON' : 'OFF'}`],
+    ['special', fd.fighterId === FighterId.Nesta ? `Tide: ${nestaSizeLabel(fd.nestaSize)}` : `Blaze: ${fd.piping ? 'ON' : 'OFF'}`],
   ];
   return (
     <div class="card paper type frame-data-panel">
@@ -148,9 +149,11 @@ export const HudLayer = memo(({
       <div class={`hud-tags${state.fighters.length > 4 ? ' compact' : ''}`}>
         {state.fighters.map((f) => {
           const hex = playerColor(f.colourIndex).hex;
+          const elem = getElementalFighter(f.fighterId);
           const cls = `tag${f.damage >= 100 ? ' danger' : ''}${f.comboCount >= 2 ? ' hot' : ''}${f.state === FighterState.Eliminated ? ' eliminated' : ''}`;
           return (
             <div key={f.slot} class={cls}>
+              <img class="hud-portrait" src={elem.portraitUrl} alt={elem.name} style={{ borderColor: hex }} />
               <div class="who"><Disc slot={f.slot} colourIndex={f.colourIndex} /><span>{f.isLocal ? `${f.name} ★` : f.name}</span><span class="cb-badge" aria-hidden="true">{cbShapeForColour(f.colourIndex)}</span></div>
               <div class="pct">{Math.floor(f.damage)}<small>%</small></div>
               <div class="side">

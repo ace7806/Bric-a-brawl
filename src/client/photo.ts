@@ -1,6 +1,6 @@
 import { assert, assertFinite, InvariantError } from '@sim/assert';
-import { getFighterSpec } from '@sim/data';
 import { ErrorCode, FighterId } from '@sim/enums';
+import { getElementalFighter } from './elemental-roster';
 
 export const PHOTO_WIDTH = 1200;
 export const PHOTO_HEIGHT = 630;
@@ -206,7 +206,7 @@ export function renderResultsPhotoCanvas(input: PhotoCaptureInput): HTMLCanvasEl
   const { canvas, ctx } = createCanvas(PHOTO_WIDTH, PHOTO_HEIGHT);
   drawCatalogueFrame(ctx, DELFT_INK);
 
-  const fighterName = getFighterSpec(input.winnerFighter).name;
+  const fighterName = getElementalFighter(input.winnerFighter).name;
   ctx.fillStyle = DELFT_INK;
   ctx.font = '700 16px "Courier New", monospace';
   ctx.fillText(`LOT ${input.roundNumber} — BRIC-A-BRAWL`, 48, 66);
