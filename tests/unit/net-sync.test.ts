@@ -58,6 +58,7 @@ function packetFromSeq(seq: readonly number[], tick: number, lastSnapshotTick = 
     tick: tick & 0xffff,
     masks: [m(tick), m(tick - 1), m(tick - 2), m(tick - 3)],
     lastSnapshotTick: lastSnapshotTick & 0xffff,
+    epoch: 0,
   };
 }
 
@@ -176,7 +177,7 @@ describe('InputJitterBuffer', () => {
         const m1 = t >= 1 ? ((t - 1) * 257) & 0xffff : 0;
         const m2 = t >= 2 ? ((t - 2) * 257) & 0xffff : 0;
         const m3 = t >= 3 ? ((t - 3) * 257) & 0xffff : 0;
-        buf.ingestPacket(0, { tick: t & 0xffff, masks: [m, m1, m2, m3], lastSnapshotTick: t & 0xffff }, t);
+        buf.ingestPacket(0, { tick: t & 0xffff, masks: [m, m1, m2, m3], lastSnapshotTick: t & 0xffff, epoch: 0 }, t);
       }
       const res = buf.popInputForTick(0, t);
       if (res.inputTick >= 0) lastPopMask = res.mask;
@@ -243,6 +244,7 @@ describe('RemoteInterpolator', () => {
 
     const makeWorldSnap = (tick: number, f1x: number, f1y: number, stateFrame1: number, projX: number, chunkX: number): SnapshotData => ({
       tick,
+      epoch: 0,
       lastAppliedInputTicks: [tick - 1, tick - 1],
       fighters: [
         makeSnapFighter(1, f1x, f1y, FighterState.Attack, stateFrame1, MoveId.Ftilt),
@@ -291,8 +293,8 @@ describe('PredictionController', () => {
 
     const seq = tape().tap(InputDir.Right).tap(InputDir.Left, InputBit.Jump).tap(InputDir.Up).tap(InputDir.Down).tap(InputDir.Right, InputBit.Attack).build();
     const packets = seq.map((m, t) => pred.recordInput(t, m));
-    expect(packets[0]).toEqual({ tick: 0, masks: [seq[0], 0, 0, 0], lastSnapshotTick: 2 });
-    expect(packets[4]).toEqual({ tick: 4, masks: [seq[4], seq[3], seq[2], seq[1]], lastSnapshotTick: 2 });
+    expect(packets[0]).toEqual({ tick: 0, masks: [seq[0], 0, 0, 0], lastSnapshotTick: 2, epoch: 0 });
+    expect(packets[4]).toEqual({ tick: 4, masks: [seq[4], seq[3], seq[2], seq[1]], lastSnapshotTick: 2, epoch: 0 });
   });
 
   it('drops acked inputs, replays unacked inputs, blends < 0.5 u over 6 frames, and snaps >= 0.5 u (N4/N5)', () => {

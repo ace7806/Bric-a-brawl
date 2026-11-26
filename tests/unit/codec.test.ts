@@ -67,6 +67,7 @@ function buildSnapshot(
 ): SnapshotData {
   return {
     tick: 1234,
+    epoch: 2,
     lastAppliedInputTicks: Array.from({ length: fighterCount }, (_, i) => 1230 - i),
     fighters: Array.from({ length: fighterCount }, (_, slot) => ({
       slot,
@@ -144,7 +145,7 @@ describe('net codec quantisation, byte budgets, round-trips & RoomSession', () =
   });
 
   it('meets MASTER_DESIGN 7.3.4 & 7.3.7 msgpackr byte sizes and bandwidth budgets', () => {
-    const inputBytes = encodeInputPacket({ tick: 500, masks: [0x0143, 0x0043, 0x0003, 0x0000], lastSnapshotTick: 498 });
+    const inputBytes = encodeInputPacket({ tick: 500, masks: [0x0143, 0x0043, 0x0003, 0x0000], lastSnapshotTick: 498, epoch: 1 });
     expect(inputBytes.byteLength).toBeLessThanOrEqual(20);
 
     const fightersOnly = encodeSnapshot(buildSnapshot(8, 4, 0, 0, 0, false), false);
@@ -176,7 +177,7 @@ describe('net codec quantisation, byte budgets, round-trips & RoomSession', () =
   });
 
   it('round-trips InputPacket, SnapshotData (with & without world), and all ReliableNetMessage kinds with zero mismatch', () => {
-    const pkt: InputPacket = { tick: 999, masks: [0x1204, 0x0043, 0x0003, 0], lastSnapshotTick: 995 };
+    const pkt: InputPacket = { tick: 999, masks: [0x1204, 0x0043, 0x0003, 0], lastSnapshotTick: 995, epoch: 3 };
     const pktBytes = encodeInputPacket(pkt);
     expect(peekUnreliableKind(pktBytes)).toBe(NetMessageKind.Input);
     expect(decodeInputPacket(pktBytes)).toEqual(pkt);
@@ -197,6 +198,7 @@ describe('net codec quantisation, byte budgets, round-trips & RoomSession', () =
         kind: NetMessageKind.Roster,
         roster: {
           version: 3,
+          matchEpoch: 2,
           hostId: 'p0',
           phase: RoomPhase.Round,
           arenaId: ArenaId.Willow,

@@ -106,11 +106,14 @@ export class InputJitterBuffer {
     return this.slots[slot] as SlotJitterState;
   }
 
-  public ingestPacket(slot: number, packet: InputPacket, hostTick: number): void {
+  public ingestPacket(slot: number, packet: InputPacket, hostTick: number): number {
     assert(Number.isInteger(hostTick), ErrorCode.InvariantViolation, `hostTick must be int: ${hostTick}`);
     assert(packet.masks.length === this.redundancy, ErrorCode.SchemaValidationFailed, 'InputPacket masks length mismatch');
     const s = this.slotAt(slot);
-    const baseTick = unwrap16(packet.tick, hostTick);
+    // Unwrap client input sequence against this slot's own input clock, not hostTick,
+    // so a client joining at tick 0 after hostTick > 32768 never wraps to 65536.
+    const refTick = s.newestReceivedTick >= 0 ? s.newestReceivedTick : (packet.tick & 0xffff);
+    const baseTick = unwrap16(packet.tick, refTick);
     for (let i = 0; i < this.redundancy; i++) {
       const t = baseTick - i;
       if (t < 0 || t <= s.lastAppliedTick) continue;
@@ -126,6 +129,7 @@ export class InputJitterBuffer {
     const sampleRtt = Math.max(0, hostTick - snapTick);
     s.rttTicks = s.hasRttSample ? s.rttTicks * (1 - RTT_EMA_ALPHA) + sampleRtt * RTT_EMA_ALPHA : sampleRtt;
     s.hasRttSample = true;
+    return baseTick;
   }
 
   public popInputForTick(slot: number, hostTick: number): PoppedInput {
@@ -593,6 +597,10 @@ export class PredictionController {
     return this.lastSnapshotTick;
   }
 
+  public getOneWayMs(): number {
+    return this.oneWayMs;
+  }
+
   public observeAckOneWayMs(lastAppliedTick: number, arrivalMs: number): number {
     if (lastAppliedTick >= 0) {
       const idx = lastAppliedTick & INPUT_RING_MASK;
@@ -618,7 +626,7 @@ export class PredictionController {
     this.predY[idx] = y;
   }
 
-  public recordInput(tick: number, mask: number, sentAtMs = -1): InputPacket {
+  public recordInput(tick: number, mask: number, sentAtMs = -1, epoch = 0): InputPacket {
     assert(Number.isInteger(tick) && tick >= 0, ErrorCode.InvariantViolation, `Invalid input tick ${tick}`);
     const masked = mask & 0xffff;
     const rIdx = tick & INPUT_RING_MASK;
@@ -643,6 +651,7 @@ export class PredictionController {
       tick: tick & 0xffff,
       masks: [m(tick), m(tick - 1), m(tick - 2), m(tick - 3)],
       lastSnapshotTick: this.lastSnapshotTick & 0xffff,
+      epoch: epoch & 0xffff,
     };
   }
 

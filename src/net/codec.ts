@@ -37,6 +37,7 @@ export interface InputPacket {
   readonly tick: number;
   readonly masks: readonly [number, number, number, number];
   readonly lastSnapshotTick: number;
+  readonly epoch: number;
 }
 
 export interface SnapshotFighter {
@@ -102,6 +103,7 @@ export interface SnapshotGadget {
 
 export interface SnapshotData {
   readonly tick: number;
+  readonly epoch: number;
   readonly lastAppliedInputTicks: readonly number[];
   readonly fighters: readonly SnapshotFighter[];
   readonly projectiles: readonly SnapshotProjectile[];
@@ -132,6 +134,7 @@ export interface RoomSettingsData {
 
 export interface RoomRosterData {
   readonly version: number;
+  readonly matchEpoch: number;
   readonly hostId: string;
   readonly phase: RoomPhase;
   readonly arenaId: ArenaId;
@@ -195,7 +198,10 @@ export const uqDmg = (q: number): number => q / DMG_SCALE;
 
 function packBytes(value: unknown): Uint8Array {
   const packed = packr.pack(value);
-  return new Uint8Array(packed.buffer, packed.byteOffset, packed.byteLength);
+  // Copy out of msgpackr's shared reusable slab so queued packets or Worker ArrayBuffer transfers never alias/corrupt.
+  const copy = new Uint8Array(packed.byteLength);
+  copy.set(packed);
+  return copy;
 }
 
 function asArray(val: unknown, label: string): unknown[] {
@@ -235,12 +241,13 @@ export function encodeInputPacket(pkt: InputPacket): Uint8Array {
     pkt.masks[2] & 0xffff,
     pkt.masks[3] & 0xffff,
     pkt.lastSnapshotTick & 0xffff,
+    pkt.epoch & 0xffff,
   ]);
 }
 
 export function decodeInputPacket(bytes: Uint8Array): InputPacket {
   const arr = asArray(packr.unpack(bytes), 'inputPacket');
-  assert(arr.length === 7, ErrorCode.SchemaValidationFailed, `inputPacket len=${arr.length}`);
+  assert(arr.length === 8, ErrorCode.SchemaValidationFailed, `inputPacket len=${arr.length}`);
   assert(asInt(arr[0], 'input.kind') === NetMessageKind.Input, ErrorCode.InvalidEnumValue, 'expected Input kind');
   return {
     tick: asInt(arr[1], 'input.tick'),
@@ -251,11 +258,13 @@ export function decodeInputPacket(bytes: Uint8Array): InputPacket {
       asInt(arr[5], 'input.m3'),
     ],
     lastSnapshotTick: asInt(arr[6], 'input.lastSnapshotTick'),
+    epoch: asInt(arr[7], 'input.epoch'),
   };
 }
 
 export function encodeSnapshot(snap: SnapshotData, includeWorld: boolean): Uint8Array {
   const fighters = snap.fighters.map((f) => [
+    f.slot | 0,
     qPos(f.x),
     qPos(f.y),
     qVel(f.vx),
@@ -282,6 +291,7 @@ export function encodeSnapshot(snap: SnapshotData, includeWorld: boolean): Uint8
   ]);
   const root: unknown[] = [
     NetMessageKind.Snapshot,
+    snap.epoch & 0xffff,
     snap.tick | 0,
     snap.lastAppliedInputTicks.map((t) => t | 0),
     fighters,
@@ -323,15 +333,17 @@ export function encodeSnapshot(snap: SnapshotData, includeWorld: boolean): Uint8
 
 export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
   const arr = asArray(packr.unpack(bytes), 'snapshot');
-  assert(arr.length === 5 || arr.length === 8, ErrorCode.SchemaValidationFailed, `snapshot len=${arr.length}`);
+  assert(arr.length === 6 || arr.length === 9, ErrorCode.SchemaValidationFailed, `snapshot len=${arr.length}`);
   assert(asInt(arr[0], 'snap.kind') === NetMessageKind.Snapshot, ErrorCode.InvalidEnumValue, 'expected Snapshot kind');
-  const tick = asInt(arr[1], 'snap.tick');
-  const lastAppliedInputTicks = asArray(arr[2], 'snap.lastInputs').map((v, i) => asInt(v, `lastInput[${i}]`));
-  const fighters = asArray(arr[3], 'snap.fighters').map((raw, slot) => {
-    const f = asArray(raw, `fighter[${slot}]`);
-    assert(f.length === 12, ErrorCode.SchemaValidationFailed, `fighter[${slot}] len=${f.length}`);
-    const stocksGadget = asInt(f[10], 'fighter.stocksGadget');
-    const extra = asInt(f[11], 'fighter.extra');
+  const epoch = asInt(arr[1], 'snap.epoch');
+  const tick = asInt(arr[2], 'snap.tick');
+  const lastAppliedInputTicks = asArray(arr[3], 'snap.lastInputs').map((v, i) => asInt(v, `lastInput[${i}]`));
+  const fighters = asArray(arr[4], 'snap.fighters').map((raw, idx) => {
+    const f = asArray(raw, `fighter[${idx}]`);
+    assert(f.length === 13, ErrorCode.SchemaValidationFailed, `fighter[${idx}] len=${f.length}`);
+    const slot = asInt(f[0], 'fighter.slot');
+    const stocksGadget = asInt(f[11], 'fighter.stocksGadget');
+    const extra = asInt(f[12], 'fighter.extra');
     const activeMoveRaw = (extra >> 6) & 0x3f;
     assert(
       activeMoveRaw >= MoveId.None && activeMoveRaw <= MoveId.Getup,
@@ -340,17 +352,17 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
     );
     return {
       slot,
-      x: uqPos(asInt(f[0], 'fighter.x')),
-      y: uqPos(asInt(f[1], 'fighter.y')),
-      vx: uqVel(asInt(f[2], 'fighter.vx')),
-      vy: uqVel(asInt(f[3], 'fighter.vy')),
-      state: asInt(f[4], 'fighter.state') as FighterState,
-      stateFrame: asInt(f[5], 'fighter.stateFrame'),
+      x: uqPos(asInt(f[1], 'fighter.x')),
+      y: uqPos(asInt(f[2], 'fighter.y')),
+      vx: uqVel(asInt(f[3], 'fighter.vx')),
+      vy: uqVel(asInt(f[4], 'fighter.vy')),
+      state: asInt(f[5], 'fighter.state') as FighterState,
+      stateFrame: asInt(f[6], 'fighter.stateFrame'),
       activeMove: activeMoveRaw as MoveId,
-      flags: asInt(f[6], 'fighter.flags'),
-      damage: uqDmg(asInt(f[7], 'fighter.damage')),
-      guardHp: asInt(f[8], 'fighter.guardHp'),
-      gilt: asInt(f[9], 'fighter.gilt'),
+      flags: asInt(f[7], 'fighter.flags'),
+      damage: uqDmg(asInt(f[8], 'fighter.damage')),
+      guardHp: asInt(f[9], 'fighter.guardHp'),
+      gilt: asInt(f[10], 'fighter.gilt'),
       stocks: (stocksGadget >> 4) & 0x0f,
       heldGadget: (stocksGadget & 0x0f) as GadgetId,
       nestaSize: (extra & 0x03) as NestaSize,
@@ -358,7 +370,7 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
       hitstopFrames: (extra >> 12) & 0x0f,
     };
   });
-  const projectiles = asArray(arr[4], 'snap.projectiles').map((raw, i) => {
+  const projectiles = asArray(arr[5], 'snap.projectiles').map((raw, i) => {
     const p = asArray(raw, `proj[${i}]`);
     assert(p.length === 6, ErrorCode.SchemaValidationFailed, `proj[${i}] len=${p.length}`);
     return {
@@ -370,9 +382,9 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
       vy: uqVel(asInt(p[5], 'proj.vy')),
     };
   });
-  const hasWorld = arr.length === 8;
+  const hasWorld = arr.length === 9;
   const chunks: SnapshotChunk[] = hasWorld
-    ? asArray(arr[5], 'snap.chunks').map((raw, i) => {
+    ? asArray(arr[6], 'snap.chunks').map((raw, i) => {
         const c = asArray(raw, `chunk[${i}]`);
         assert(c.length === 7, ErrorCode.SchemaValidationFailed, `chunk[${i}] len=${c.length}`);
         const stateBits = asInt(c[6], 'chunk.state');
@@ -389,7 +401,7 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
       })
     : [];
   const rubble: SnapshotRubble[] = hasWorld
-    ? asArray(arr[6], 'snap.rubble').map((raw, i) => {
+    ? asArray(arr[7], 'snap.rubble').map((raw, i) => {
         const r = asArray(raw, `rubble[${i}]`);
         assert(r.length === 6, ErrorCode.SchemaValidationFailed, `rubble[${i}] len=${r.length}`);
         return {
@@ -403,7 +415,7 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
       })
     : [];
   const gadgets: SnapshotGadget[] = hasWorld
-    ? asArray(arr[7], 'snap.gadgets').map((raw, i) => {
+    ? asArray(arr[8], 'snap.gadgets').map((raw, i) => {
         const g = asArray(raw, `gadget[${i}]`);
         assert(g.length === 8, ErrorCode.SchemaValidationFailed, `gadget[${i}] len=${g.length}`);
         const stateAmmo = asInt(g[7], 'gadget.stateAmmo');
@@ -420,7 +432,7 @@ export function decodeSnapshot(bytes: Uint8Array): SnapshotData {
         };
       })
     : [];
-  return { tick, lastAppliedInputTicks, fighters, projectiles, chunks, rubble, gadgets, hasWorld };
+  return { tick, epoch, lastAppliedInputTicks, fighters, projectiles, chunks, rubble, gadgets, hasWorld };
 }
 
 export function encodeReliableMessage(msg: ReliableNetMessage): Uint8Array {
@@ -442,6 +454,7 @@ export function encodeReliableMessage(msg: ReliableNetMessage): Uint8Array {
         r.countdownTicks,
         [s.mode, s.fragile, s.stocks, s.enableTierB, s.enableTierC],
         r.slots.map((sl) => [sl.slot, sl.peerId, sl.name, sl.fighterId, sl.colourIndex, sl.team, sl.wins, sl.status]),
+        r.matchEpoch,
       ]);
     }
     case NetMessageKind.Events:
@@ -484,7 +497,7 @@ export function decodeReliableMessage(bytes: Uint8Array): ReliableNetMessage {
       assert(arr.length === 2, ErrorCode.SchemaValidationFailed, 'Bye len');
       return { kind, reason: asInt(arr[1], 'bye.reason') as ByeReason };
     case NetMessageKind.Roster: {
-      assert(arr.length === 9, ErrorCode.SchemaValidationFailed, 'Roster len');
+      assert(arr.length === 10, ErrorCode.SchemaValidationFailed, 'Roster len');
       const setArr = asArray(arr[7], 'roster.settings');
       assert(setArr.length === 5, ErrorCode.SchemaValidationFailed, 'roster.settings len');
       const slots = asArray(arr[8], 'roster.slots').map((raw, i) => {
@@ -505,6 +518,7 @@ export function decodeReliableMessage(bytes: Uint8Array): ReliableNetMessage {
         kind,
         roster: {
           version: asInt(arr[1], 'roster.ver'),
+          matchEpoch: asInt(arr[9], 'roster.matchEpoch'),
           hostId: asStr(arr[2], 'roster.hostId'),
           phase: asInt(arr[3], 'roster.phase') as RoomPhase,
           arenaId: asInt(arr[4], 'roster.arenaId') as ArenaId,

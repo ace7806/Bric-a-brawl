@@ -158,14 +158,14 @@ async function handleMessage(msg: HostWorkerInbound): Promise<void> {
       currentEpoch = msg.epoch;
       await initPhysics();
       stopLoop();
-      sim = new HostSimulation(msg.config);
+      sim = new HostSimulation({ ...msg.config, matchEpoch: msg.config.matchEpoch ?? msg.epoch });
       lastWakeMs = performance.now();
       accumMs = 0;
       timerId = setInterval(stepLoop, WAKE_INTERVAL_MS);
       postEvent({ event: HostWorkerEvent.Ready });
       return;
     case HostWorkerCmd.LocalInput:
-      if (sim) sim.setLocalInput(msg.slot, msg.mask);
+      if (sim && sim.isLocalSlot(msg.slot)) sim.setLocalInput(msg.slot, msg.mask);
       return;
     case HostWorkerCmd.ClientPacket:
       if (sim) sim.ingestClientInput(msg.slot, msg.packet);

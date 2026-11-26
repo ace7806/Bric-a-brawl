@@ -269,6 +269,7 @@ export class ClientPredictor {
   public readonly fighter: FighterRuntime;
   public readonly controller: PredictionController;
   public readonly localSlot: number;
+  public readonly matchEpoch: number;
   private readonly checkpoints: FighterCheckpoint[];
   private lastAuthStocks: number;
   private lastAuthState: FighterState;
@@ -279,8 +280,9 @@ export class ClientPredictor {
   private lastAuthWasCombat = false;
   private hasFirstAck = false;
 
-  public constructor(matchConfig: MatchConfig, localSlot: number) {
+  public constructor(matchConfig: MatchConfig, localSlot: number, matchEpoch = 0) {
     this.localSlot = localSlot;
+    this.matchEpoch = matchEpoch & 0xffff;
     this.world = new SimWorld(matchConfig);
     const f = this.world.fighters.find((x) => x.slot === localSlot);
     assert(f !== undefined, ErrorCode.IndexOutOfBounds, `ClientPredictor slot ${localSlot} missing from matchConfig`);
@@ -301,10 +303,11 @@ export class ClientPredictor {
     writeCheckpoint(this.checkpoints[inputTick & CHECKPOINT_RING_MASK]!, inputTick, this.fighter);
     this.controller.recordPredictedState(inputTick, this.fighter.x, this.fighter.y);
     this.controller.stepVisualOffset();
-    return this.controller.recordInput(inputTick, mask, sentAtMs);
+    return this.controller.recordInput(inputTick, mask, sentAtMs, this.matchEpoch);
   }
 
   public observeAckOneWayMs(snap: SnapshotData, arrivalMs: number): number {
+    if ((snap.epoch & 0xffff) !== this.matchEpoch) return this.controller.getOneWayMs();
     const la =
       this.localSlot >= 0 && this.localSlot < snap.lastAppliedInputTicks.length
         ? snap.lastAppliedInputTicks[this.localSlot]!
@@ -327,6 +330,7 @@ export class ClientPredictor {
   }
 
   public reconcileSnapshot(snap: SnapshotData): ReconcileResult | null {
+    if ((snap.epoch & 0xffff) !== this.matchEpoch) return null;
     if (snap.tick <= this.controller.getLastSnapshotTick()) return null;
     this.controller.setLastSnapshotTick(snap.tick);
     if (snap.hasWorld) {

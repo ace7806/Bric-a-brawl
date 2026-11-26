@@ -16,6 +16,7 @@
     "test:integration": "node scripts/heavy.mjs test:integration",
     "test:full": "node scripts/heavy.mjs test:full",
     "test:browser": "node scripts/heavy.mjs test:browser",
+    "test:netcode": "npx tsx tests/browser/netcode-sync.spec.ts",
     "eval:combat": "vitest run tests/unit/combat-feel.test.ts && npx tsx tests/browser/combat-feel.spec.ts",
     "build": "node scripts/heavy.mjs build",
     "bots": "node scripts/heavy.mjs bots",

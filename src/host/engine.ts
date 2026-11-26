@@ -9,7 +9,7 @@ import {
   type SnapshotProjectile,
   type SnapshotRubble,
 } from '@net/codec';
-import { InputJitterBuffer, unwrap16 } from '@net/sync';
+import { InputJitterBuffer } from '@net/sync';
 import { assert, assertFinite } from '@sim/assert';
 import { getArenaSpec, getGameData } from '@sim/data';
 import { ArenaId, ErrorCode, FighterId, InputBit, MatchMode, TeamId } from '@sim/enums';
@@ -30,6 +30,8 @@ export interface HostEngineConfig {
   readonly bots?: ReadonlyMap<number, BotConfig> | Readonly<Record<number, BotConfig>>;
   /** When true (local browser host worker), emit lightweight fighter snapshots on odd ticks too for 60 Hz zero-lag display. Network broadcast still uses snapshotBytes (30 Hz). */
   readonly emitLocalEveryTick?: boolean;
+  /** Monotonic match epoch matching RoomRosterData.matchEpoch so stale packets from prior matches are dropped cleanly. */
+  readonly matchEpoch?: number;
 }
 
 export interface HostTickOutput {
@@ -65,7 +67,9 @@ export class HostSimulation {
   public readonly world: SimWorld;
   public readonly jitter: InputJitterBuffer;
   public readonly bots = new Map<number, BotController>();
+  public readonly matchEpoch: number;
   private readonly botRngs = new Map<number, SeededRng>();
+  private readonly activeRemoteSlots = new Set<number>();
   private readonly localSlot: number | null;
   private readonly emitLocalEveryTick: boolean;
   private readonly normalSnapshotEvery: number;
@@ -84,6 +88,7 @@ export class HostSimulation {
     this.jitter = new InputJitterBuffer();
     this.localSlot = config.localSlot ?? null;
     this.emitLocalEveryTick = config.emitLocalEveryTick === true;
+    this.matchEpoch = (config.matchEpoch ?? 0) & 0xffff;
 
     const { tuning } = getGameData();
     this.normalSnapshotEvery = Math.max(1, Math.round(tuning.tickRate / tuning.net.snapshotHz));
@@ -97,9 +102,15 @@ export class HostSimulation {
         assert(fc.slot !== this.localSlot, ErrorCode.InvariantViolation, `Slot ${fc.slot} cannot be both local and bot`);
         this.bots.set(fc.slot, createBot(botCfg));
         this.botRngs.set(fc.slot, new SeededRng((config.match.seed ^ ((fc.slot + 1) * 0x9e3779b1)) | 0));
+      } else if (fc.slot !== this.localSlot) {
+        this.activeRemoteSlots.add(fc.slot);
       }
     }
     this.maxSlotCount = maxSlot + 1;
+  }
+
+  public isLocalSlot(slot: number): boolean {
+    return this.localSlot !== null && slot === this.localSlot;
   }
 
   public setLocalInput(slot: number, mask: number): void {
@@ -112,9 +123,10 @@ export class HostSimulation {
   }
 
   public ingestClientInput(slot: number, packet: InputPacket): void {
-    assert(slot !== this.localSlot && !this.bots.has(slot), ErrorCode.InvariantViolation, `Slot ${slot} is not a remote client slot`);
-    const unwrappedTick = unwrap16(packet.tick, this.world.tick);
-    this.jitter.ingestPacket(slot, packet, this.world.tick);
+    // Ignore spectator slots, departed/non-active slots, and packets from prior match epochs cleanly.
+    if (!this.activeRemoteSlots.has(slot)) return;
+    if ((packet.epoch & 0xffff) !== this.matchEpoch) return;
+    const unwrappedTick = this.jitter.ingestPacket(slot, packet, this.world.tick);
     const defender = this.world.fighters.find((f) => f.slot === slot);
     if (defender && defender.pendingHit !== null) {
       for (let i = 0; i < packet.masks.length; i++) {
@@ -302,6 +314,7 @@ export class HostSimulation {
 
     return {
       tick: this.world.tick,
+      epoch: this.matchEpoch,
       lastAppliedInputTicks,
       fighters,
       projectiles,

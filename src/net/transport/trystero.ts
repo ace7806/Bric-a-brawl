@@ -29,6 +29,7 @@ export interface TrysteroTransportOptions {
 }
 
 interface UnreliableState {
+  pc: RTCPeerConnection | null;
   channel: RTCDataChannel | null;
   open: boolean;
   ordered: boolean | null;
@@ -246,8 +247,9 @@ export async function createTrysteroTransport(options: TrysteroTransportOptions)
   const attachUnreliableChannel = (peerId: string): void => {
     const peerInfo = room.getPeers()[peerId];
     const pc = peerInfo?.connection ?? null;
-    if (!pc) {
+    if (!pc || pc.connectionState === 'closed') {
       unreliableByPeer.set(peerId, {
+        pc: null,
         channel: null,
         open: false,
         ordered: null,
@@ -257,7 +259,11 @@ export async function createTrysteroTransport(options: TrysteroTransportOptions)
     }
 
     const existing = unreliableByPeer.get(peerId);
-    if (existing?.channel) return;
+    if (existing?.pc === pc && existing.channel && existing.channel.readyState !== 'closed') return;
+    if (existing?.channel && existing.channel.readyState !== 'closed') {
+      existing.channel.onopen = existing.channel.onclose = existing.channel.onerror = existing.channel.onmessage = null;
+      existing.channel.close();
+    }
 
     const seenCandidates = peerCandidateTypesSeen.get(peerId) ?? new Set<string>();
     peerCandidateTypesSeen.set(peerId, seenCandidates);
@@ -276,6 +282,7 @@ export async function createTrysteroTransport(options: TrysteroTransportOptions)
     channel.binaryType = 'arraybuffer';
 
     const entry: UnreliableState = {
+      pc,
       channel,
       open: channel.readyState === 'open',
       ordered: channel.ordered,
@@ -386,25 +393,37 @@ export async function createTrysteroTransport(options: TrysteroTransportOptions)
   }
 
   const send = (peerId: string, channel: ChannelKind, payload: Uint8Array): void => {
-    if (closed) return;
+    if (closed || !peerIds.has(peerId)) return;
     switch (channel) {
       case ChannelKind.Reliable:
         void relAction.send(payload, { target: peerId }).catch((err: unknown) => {
-          if (!closed) {
+          if (!closed && peerIds.has(peerId)) {
             const msg = err instanceof Error ? err.message : String(err);
             emitError(ConnectionState.PeerFailed, `Reliable send failed (${peerId}): ${msg}`);
           }
         });
         break;
       case ChannelKind.Unreliable: {
-        // ZERO FALLBACKS: never route Unreliable over Reliable. Drop if not open.
-        const entry = unreliableByPeer.get(peerId);
+        // ZERO FALLBACKS: never route Unreliable over Reliable. Self-heal attachment if direct PC just appeared.
+        let entry = unreliableByPeer.get(peerId);
+        const currentPc = room.getPeers()[peerId]?.connection ?? null;
+        if (currentPc && (!entry || entry.pc !== currentPc || !entry.channel || entry.channel.readyState === 'closed')) {
+          attachUnreliableChannel(peerId);
+          entry = unreliableByPeer.get(peerId);
+        }
         if (!entry?.channel || entry.channel.readyState !== 'open') {
           if (entry) entry.open = false;
           return;
         }
         entry.open = true;
-        entry.channel.send(new Uint8Array(payload));
+        try {
+          entry.channel.send(new Uint8Array(payload));
+        } catch {
+          entry.open = false;
+          if ((entry.channel.readyState as RTCDataChannelState) !== 'open') {
+            unreliableByPeer.delete(peerId);
+          }
+        }
         break;
       }
       default:
@@ -430,6 +449,10 @@ export async function createTrysteroTransport(options: TrysteroTransportOptions)
     for (const peerId of peerIds) {
       const info = roomPeers[peerId];
       const pc = info?.connection ?? null;
+      const prevEntry = unreliableByPeer.get(peerId);
+      if (pc && (!prevEntry || prevEntry.pc !== pc || !prevEntry.channel || prevEntry.channel.readyState === 'closed')) {
+        attachUnreliableChannel(peerId);
+      }
       const statsTypes = await readPeerCandidateTypes(pc);
       const seenSet = peerCandidateTypesSeen.get(peerId);
       const mergedTypes = new Set<string>(statsTypes);

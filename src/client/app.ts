@@ -56,12 +56,29 @@ const GADGET_USE_SOUND = new Map<GadgetId, SoundId>([
   [GadgetId.Magnet, SoundId.MagnetFire],
 ]);
 
+export interface DebugFighterState {
+  readonly slot: number;
+  readonly id: FighterId;
+  readonly x: number;
+  readonly y: number;
+  readonly vx: number;
+  readonly vy: number;
+  readonly state: FighterState;
+  readonly activeMove: MoveId;
+  readonly damage: number;
+  readonly stocks: number;
+}
+
 export interface DebugApi {
   readonly ready: boolean;
   readonly firstLobbyFrameMs: number;
   readonly screen: ScreenId;
   readonly phase: RoomPhase;
   readonly tick: number;
+  readonly matchEpoch: number;
+  readonly localSlot: number;
+  readonly isHost: boolean;
+  readonly roomCode: string;
   readonly peerCount: number;
   readonly snapshotsReceived: number;
   readonly maxSnapshotGapMs: number;
@@ -74,6 +91,7 @@ export interface DebugApi {
   readonly reduceFlashes: boolean;
   readonly audioState: AudioContextState | 'uninitialized';
   readonly lastInputMask: number;
+  readonly fightersState: readonly DebugFighterState[];
   readonly localFighterState: {
     readonly state: FighterState;
     readonly activeMove: MoveId;
@@ -82,6 +100,7 @@ export interface DebugApi {
     readonly x: number;
     readonly y: number;
   } | null;
+  getTransportDiagnostics(): Promise<Awaited<ReturnType<Transport['getDiagnostics']>> | null>;
   resetSnapshotGap(): void;
   setReduceFlashes(reduce: boolean): void;
   startRoundNow(): void;
@@ -95,6 +114,15 @@ export interface DebugApi {
 }
 
 declare global { interface Window { __bbDebug?: DebugApi; } }
+
+function normalizeRoomCode(raw: string): string {
+  const trimmed = raw.trim();
+  const fragMatch = /#r=([a-z0-9-]+)/i.exec(trimmed);
+  if (fragMatch && fragMatch[1]) return fragMatch[1].toLowerCase();
+  const queryMatch = /[?&]room=([a-z0-9-]+)/i.exec(trimmed);
+  if (queryMatch && queryMatch[1]) return queryMatch[1].toLowerCase();
+  return trimmed.toLowerCase();
+}
 
 function makePlaceholderIsland(arenaId: ArenaId): IslandState {
   const spec = getArenaSpec(arenaId);
@@ -146,14 +174,14 @@ function parseUrlParams() {
     bots: botsRaw !== null ? Math.max(0, Math.min(7, Number(botsRaw))) : 0,
     tier: tierRaw !== null ? requireKey(TIER_MAP, tierRaw.toLowerCase(), 'query.tier') : null,
     arena: arenaRaw !== null ? parseArenaId(arenaRaw.toLowerCase()) : null,
-    roomCode: q.get('room'),
+    roomCode: q.get('room') !== null ? normalizeRoomCode(q.get('room')!) : null,
     autojoin: q.get('autojoin') === '1',
     role: roleRaw === 'host' || roleRaw === 'client' ? (roleRaw as 'host' | 'client') : null,
     startRound: q.get('startRound') === '1',
     reduceFlashes: q.get('reduceFlashes') === '1',
     styleframe: q.get('styleframe') === '1',
     showcase: parseShowcaseParam(q.get('showcase')),
-    fragmentRoom: frag ? frag[1]! : null,
+    fragmentRoom: frag ? frag[1]!.toLowerCase() : null,
   };
 }
 
@@ -247,6 +275,7 @@ export class BricABrawlApp {
   private lastInputMask = 0;
   private workerRunning = false;
   private workerMatchEpoch = 0;
+  private activeMatchEpoch = 0;
   private rafId = 0;
 
   public constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
@@ -425,15 +454,19 @@ export class BricABrawlApp {
     return entry !== undefined ? entry.slot : -1;
   }
 
-  private commitHostRoster(next: RoomRosterData): void {
+  private commitHostRoster(next: RoomRosterData, bumpMatchEpoch = false): RoomRosterData {
     if (this.session) {
-      assert(this.session.isHost, ErrorCode.InvariantViolation, 'Only host mutates roster');
-      this.session.roster = next;
-      this.session.setPhase(next.phase, next.roundSeed, next.arenaId);
-    } else {
-      this.localRoster = next;
-      this.syncLobbyUi();
+      return this.session.updateRoster(next, bumpMatchEpoch);
     }
+    const baseEpoch = Math.max(this.localRoster.matchEpoch, next.matchEpoch);
+    const updated: RoomRosterData = {
+      ...next,
+      version: this.localRoster.version + 1,
+      matchEpoch: bumpMatchEpoch ? baseEpoch + 1 : baseEpoch,
+    };
+    this.localRoster = updated;
+    this.syncLobbyUi();
+    return updated;
   }
 
   private async closeNetwork(): Promise<void> {
@@ -446,16 +479,27 @@ export class BricABrawlApp {
 
   private async attachTransport(code: string, isHost: boolean): Promise<void> {
     await this.closeNetwork();
-    this.roomCode = code;
+    this.workerMatchEpoch++;
+    this.postWorker({ cmd: HostWorkerCmd.StopMatch });
+    this.workerRunning = false;
+    this.botKinds.clear();
+
+    const normalizedCode = normalizeRoomCode(code);
+    this.roomCode = normalizedCode;
     this.snapshotsReceived = 0;
     this.maxSnapshotGapMs = 0;
     this.lastSnapshotArrivalMs = 0;
-    this.resetMatchTrackers(ArenaId.Saucer, []);
+    this.resetMatchTrackers(ArenaId.Saucer, [], 0);
 
-    const transport = await createTrysteroTransport({ roomCode: code });
+    const transport = await createTrysteroTransport({ roomCode: normalizedCode });
     this.transport = transport;
     const profile = { name: this.profileName, fighterId: this.profileFighter, colourIndex: this.profileColour };
-    const initRoster = isHost ? createInitialRoster(transport.selfId, profile, this.localRoster.settings, this.localRoster.arenaId, this.localRoster.roundSeed) : undefined;
+    const initRoster = isHost
+      ? {
+          ...createInitialRoster(transport.selfId, profile, this.localRoster.settings, this.localRoster.arenaId, this.localRoster.roundSeed),
+          matchEpoch: Math.max(1, this.workerMatchEpoch + 1),
+        }
+      : undefined;
 
     this.session = new RoomSession(transport, isHost, profile, {
       onRosterChange: (r) => this.onRosterChanged(r),
@@ -465,7 +509,7 @@ export class BricABrawlApp {
           for (const s of this.roster().slots) {
             if (s.status === SlotStatus.Bot && !this.botKinds.has(s.slot)) this.botKinds.set(s.slot, BotKind.Chaser);
           }
-          this.startWorkerSaucer();
+          this.ensureHostSaucerSynced();
         }
       },
       onMessage: (_from, msg) => {
@@ -480,16 +524,24 @@ export class BricABrawlApp {
       if (ch !== ChannelKind.Unreliable) return;
       const kind = peekUnreliableKind(payload);
       if (kind === NetMessageKind.Input && this.isAuthHost()) {
-        const slot = this.roster().slots.find((s) => s.peerId === peerId)?.slot;
-        if (slot !== undefined && !this.botKinds.has(slot) && slot !== this.localSlot()) {
-          this.postWorker({ cmd: HostWorkerCmd.ClientPacket, slot, packet: decodeInputPacket(payload) });
+        const slotEntry = this.roster().slots.find((s) => s.peerId === peerId);
+        if (
+          slotEntry !== undefined &&
+          slotEntry.status !== SlotStatus.Spectating &&
+          slotEntry.status !== SlotStatus.Bot &&
+          slotEntry.slot !== this.localSlot()
+        ) {
+          const pkt = decodeInputPacket(payload);
+          if ((pkt.epoch & 0xffff) === (this.activeMatchEpoch & 0xffff)) {
+            this.postWorker({ cmd: HostWorkerCmd.ClientPacket, slot: slotEntry.slot, packet: pkt });
+          }
         }
       } else if (kind === NetMessageKind.Snapshot && !this.isAuthHost()) {
         this.ingestSnapshot(decodeSnapshot(payload), performance.now());
       }
     });
 
-    if (window.location.hash !== `#r=${code}`) history.replaceState(null, '', `#r=${code}`);
+    if (window.location.hash !== `#r=${normalizedCode}`) history.replaceState(null, '', `#r=${normalizedCode}`);
   }
 
   private async openRoom(code: string): Promise<void> {
@@ -497,14 +549,13 @@ export class BricABrawlApp {
     this.audio.setMusicPhase(MusicPhase.Lobby);
     this.ui.setScreen(ScreenId.Lobby);
     this.syncLobbyUi();
-    this.startWorkerSaucer();
+    this.ensureHostSaucerSynced();
   }
 
   private async joinRoom(code: string): Promise<void> {
-    this.workerMatchEpoch++;
-    this.postWorker({ cmd: HostWorkerCmd.StopMatch });
-    this.workerRunning = false;
-    await this.attachTransport(code, false);
+    const normalizedCode = normalizeRoomCode(code);
+    if (normalizedCode.length === 0) return;
+    await this.attachTransport(normalizedCode, false);
     this.audio.setMusicPhase(MusicPhase.Lobby);
     this.ui.setScreen(ScreenId.Lobby);
     this.syncLobbyUi();
@@ -512,7 +563,11 @@ export class BricABrawlApp {
 
   private async startSoloPractice(): Promise<void> {
     await this.closeNetwork();
-    this.localRoster = createInitialRoster('local', { name: this.profileName, fighterId: this.profileFighter, colourIndex: this.profileColour }, DEFAULT_ROOM_SETTINGS, this.localRoster.arenaId, 1);
+    const nextEpoch = Math.max(1, this.workerMatchEpoch + 1);
+    this.localRoster = {
+      ...createInitialRoster('local', { name: this.profileName, fighterId: this.profileFighter, colourIndex: this.profileColour }, DEFAULT_ROOM_SETTINGS, this.localRoster.arenaId, 1),
+      matchEpoch: nextEpoch,
+    };
     this.botKinds.clear();
     this.addBotToRoster(BotKind.Chaser);
     this.audio.setMusicPhase(MusicPhase.Lobby);
@@ -522,29 +577,43 @@ export class BricABrawlApp {
   }
 
   private onRosterChanged(roster: RoomRosterData): void {
+    const activeBotSlots = new Set(roster.slots.filter((s) => s.status === SlotStatus.Bot).map((s) => s.slot));
+    for (const slot of this.botKinds.keys()) {
+      if (!activeBotSlots.has(slot)) this.botKinds.delete(slot);
+    }
     const lSlot = this.localSlot();
     if (lSlot >= 0) this.renderer.setLocalGlazeFinish(lSlot, this.equippedFinish);
-    if (roster.slots.length > this.renderFighters.length && roster.phase === RoomPhase.Lobby) {
+    const activeCount = roster.slots.filter((s) => s.status !== SlotStatus.Spectating).length;
+    if (activeCount > this.renderFighters.length && roster.phase === RoomPhase.Lobby) {
       this.audio.playAuctioneer(AuctioneerLineId.NewLot);
     }
     this.syncLobbyUi();
     if (this.isAuthHost()) {
-      if (roster.phase === RoomPhase.Lobby && roster.slots.length !== this.renderFighters.length) this.startWorkerSaucer();
+      this.ensureHostSaucerSynced();
       return;
     }
-    if (roster.phase === RoomPhase.Round && this.ui.getScreen() !== ScreenId.Hud) {
-      this.resetMatchTrackers(roster.arenaId, roster.slots);
-      this.audio.setMusicPhase(MusicPhase.RoundA);
-      this.audio.playAuctioneer(AuctioneerLineId.DoIHearAFight);
-      this.ui.setScreen(ScreenId.Hud);
-    } else if (roster.phase === RoomPhase.Results && this.ui.getScreen() !== ScreenId.Results) {
-      this.audio.setMusicPhase(MusicPhase.Results);
-      this.rematchEndsAtMs = performance.now() + getGameData().tuning.match.rematchAutoSeconds * 1000;
-      this.ui.setScreen(ScreenId.Results);
-      this.updateResultsUi(this.rematchEndsAtMs - getGameData().tuning.match.rematchAutoSeconds * 1000);
-      void this.ui.refreshResultsMedia();
-    } else if ((roster.phase === RoomPhase.Lobby || roster.phase === RoomPhase.Countdown) && (this.ui.getScreen() === ScreenId.Hud || this.renderFighters.length !== roster.slots.length)) {
-      this.resetMatchTrackers(ArenaId.Saucer, roster.slots);
+    const epochChanged = roster.matchEpoch !== this.activeMatchEpoch;
+    if (roster.phase === RoomPhase.Round) {
+      if (epochChanged) {
+        this.resetMatchTrackers(roster.arenaId, roster.slots, roster.matchEpoch);
+      }
+      if (this.ui.getScreen() !== ScreenId.Hud) {
+        this.audio.setMusicPhase(MusicPhase.RoundA);
+        this.audio.playAuctioneer(AuctioneerLineId.DoIHearAFight);
+        this.ui.setScreen(ScreenId.Hud);
+      }
+    } else if (roster.phase === RoomPhase.Results) {
+      if (this.ui.getScreen() !== ScreenId.Results) {
+        this.audio.setMusicPhase(MusicPhase.Results);
+        this.rematchEndsAtMs = performance.now() + getGameData().tuning.match.rematchAutoSeconds * 1000;
+        this.ui.setScreen(ScreenId.Results);
+        this.updateResultsUi(this.rematchEndsAtMs - getGameData().tuning.match.rematchAutoSeconds * 1000);
+        void this.ui.refreshResultsMedia();
+      }
+    } else if (roster.phase === RoomPhase.Lobby || roster.phase === RoomPhase.Countdown) {
+      if (epochChanged) {
+        this.resetMatchTrackers(ArenaId.Saucer, roster.slots, roster.matchEpoch);
+      }
       if (this.ui.getScreen() === ScreenId.Hud || this.ui.getScreen() === ScreenId.Results) {
         this.audio.setMusicPhase(MusicPhase.Lobby);
         this.ui.setScreen(ScreenId.Lobby);
@@ -554,8 +623,17 @@ export class BricABrawlApp {
 
   private postWorker(cmd: HostWorkerInbound): void { this.worker.postMessage(cmd); }
 
+  private ensureHostSaucerSynced(): void {
+    if (!this.isAuthHost()) return;
+    const r = this.roster();
+    if (r.phase === RoomPhase.Lobby && this.activeMatchEpoch !== r.matchEpoch) {
+      this.startWorkerSaucer();
+    }
+  }
+
   private startWorkerMatch(arenaId: ArenaId, mode: MatchMode): void {
     const r = this.roster();
+    const epoch = r.matchEpoch;
     const active = r.slots.filter((s) => s.status !== SlotStatus.Spectating);
     const bots: Record<number, { kind: BotKind; reactionTicks: number }> = {};
     for (const s of active) {
@@ -570,10 +648,11 @@ export class BricABrawlApp {
       localSlot: this.smokeBotsCount > 0 || lSlot < 0 ? null : lSlot,
       bots,
       emitLocalEveryTick: this.smokeBotsCount === 0 && lSlot >= 0,
+      matchEpoch: epoch,
     };
-    this.resetMatchTrackers(arenaId, active);
+    this.resetMatchTrackers(arenaId, active, epoch);
     this.workerRunning = true;
-    const epoch = ++this.workerMatchEpoch;
+    this.workerMatchEpoch = epoch;
     this.postWorker({ cmd: HostWorkerCmd.StartMatch, config, epoch });
   }
 
@@ -587,24 +666,25 @@ export class BricABrawlApp {
     if (!this.isAuthHost()) return;
     const r = this.roster();
     this.roundNumber++;
-    this.commitHostRoster({ ...r, phase: RoomPhase.Round, countdownTicks: 0, roundSeed: (r.roundSeed + 1) | 0 });
+    const updated = this.commitHostRoster({ ...r, phase: RoomPhase.Round, countdownTicks: 0, roundSeed: (r.roundSeed + 1) | 0 }, true);
     this.audio.setMusicPhase(MusicPhase.RoundA);
     this.audio.play(SoundId.CountGo);
     this.audio.playAuctioneer(AuctioneerLineId.LotNumber);
     this.audio.playAuctioneer(AuctioneerLineId.DoIHearAFight);
     this.ui.setScreen(ScreenId.Hud);
-    this.startWorkerMatch(r.arenaId, r.settings.mode);
+    this.startWorkerMatch(updated.arenaId, updated.settings.mode);
   }
 
   private backToLobby(): void {
     if (!this.isAuthHost()) return;
-    this.commitHostRoster({ ...this.roster(), phase: RoomPhase.Lobby, countdownTicks: 0 });
+    this.commitHostRoster({ ...this.roster(), phase: RoomPhase.Lobby, countdownTicks: 0 }, true);
     this.audio.setMusicPhase(MusicPhase.Lobby);
     this.ui.setScreen(ScreenId.Lobby);
-    this.startWorkerSaucer();
+    this.ensureHostSaucerSynced();
   }
 
-  private resetMatchTrackers(arenaId: ArenaId, slots: readonly RoomSlotData[]): void {
+  private resetMatchTrackers(arenaId: ArenaId, slots: readonly RoomSlotData[], matchEpoch: number): void {
+    this.activeMatchEpoch = matchEpoch;
     this.clock = new HostClockEstimator();
     // Local host has 0ms RTT to its own worker: skip the 66ms remote interpolation buffer for crisp Smash responsiveness!
     this.interp = new RemoteInterpolator(this.isAuthHost() ? 0 : undefined);
@@ -616,6 +696,7 @@ export class BricABrawlApp {
     this.snapshotsReceived = 0;
     this.lastSnapTick = 0;
     this.clientInputTick = 0;
+    this.inputAccumMs = 0;
     this.slotStats.clear();
     this.prevDamageBySlot.clear();
     this.prevGiltFullBySlot.clear();
@@ -655,7 +736,7 @@ export class BricABrawlApp {
           enableTierB: r.settings.enableTierB,
           enableTierC: r.settings.enableTierC,
           stocksOverride: r.settings.stocks,
-        }, selfEntry.slot);
+        }, selfEntry.slot, matchEpoch);
       }
     }
     this.renderGadgets = [];
@@ -688,6 +769,7 @@ export class BricABrawlApp {
   }
 
   private ingestSnapshot(snap: SnapshotData, nowMs: number): void {
+    if ((snap.epoch & 0xffff) !== (this.activeMatchEpoch & 0xffff)) return;
     if (this.lastSnapshotArrivalMs > 0) this.maxSnapshotGapMs = Math.max(this.maxSnapshotGapMs, nowMs - this.lastSnapshotArrivalMs);
     this.lastSnapshotArrivalMs = nowMs;
     this.snapshotsReceived++;
@@ -1007,24 +1089,25 @@ export class BricABrawlApp {
     });
   }
 
-  private frameLoop(nowMs: number): void {
+  private frameLoop(_rafTsMs: number): void {
     if (this.staticModePaused) return;
-    const rawDtMs = Math.max(0.5, nowMs - this.lastFrameMs);
+    const now = performance.now();
+    const rawDtMs = Math.max(0.5, now - this.lastFrameMs);
     const dtMs = Math.min(50, rawDtMs);
-    this.lastFrameMs = nowMs;
-    const scriptStart = performance.now();
+    this.lastFrameMs = now;
+    const scriptStart = now;
     const roster = this.roster();
     const screen = this.ui.getScreen();
     const allowInput = !this.ui.isOverlayOpen() && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
-    this.inputAccumMs += dtMs;
-    for (let steps = 0; this.inputAccumMs >= DT * 1000 && steps < 4; steps++) {
+    this.inputAccumMs = Math.min(200, this.inputAccumMs + Math.min(200, rawDtMs));
+    for (let steps = 0; this.inputAccumMs >= DT * 1000 && steps < 12; steps++) {
       this.inputAccumMs -= DT * 1000;
       const mask = allowInput ? this.input.pollMask() : 0;
       this.lastInputMask = mask;
       const tick = this.clientInputTick++;
       if (this.session && !this.session.isHost) {
         if (this.clientPredictor !== null) {
-          const pkt = this.clientPredictor.predictTick(tick, mask, nowMs);
+          const pkt = this.clientPredictor.predictTick(tick, mask, now);
           this.session.transport.send(this.session.roster.hostId, ChannelKind.Unreliable, encodeInputPacket(pkt));
         }
       } else if (this.workerRunning && this.smokeBotsCount === 0) {
@@ -1033,15 +1116,15 @@ export class BricABrawlApp {
       }
     }
 
-    const sampled = this.interp.sample(nowMs, this.clock.isInitialized() ? this.clock.estimateHostTick(nowMs) : 0);
+    const sampled = this.interp.sample(now, this.clock.isInitialized() ? this.clock.estimateHostTick(now) : 0);
     this.syncRenderState(sampled);
 
     if (this.isAuthHost()) {
       if (roster.phase === RoomPhase.Lobby && screen === ScreenId.Lobby) this.stepLobbyPlatter(roster, dtMs);
       else if (roster.phase === RoomPhase.Countdown) this.stepCountdown(roster, dtMs);
       else if (roster.phase === RoomPhase.Results && screen === ScreenId.Results) {
-        this.updateResultsUi(nowMs);
-        if (nowMs >= this.rematchEndsAtMs) {
+        this.updateResultsUi(now);
+        if (now >= this.rematchEndsAtMs) {
           if (roster.slots.some((s) => s.wins >= getGameData().tuning.match.sessionWinsToTake)) {
             this.commitHostRoster({ ...roster, phase: RoomPhase.Lobby, slots: roster.slots.map((s) => ({ ...s, wins: 0 })) });
             this.backToLobby();
@@ -1052,22 +1135,26 @@ export class BricABrawlApp {
           }
         }
       }
+    } else if (roster.phase === RoomPhase.Lobby && screen === ScreenId.Lobby) {
+      this.stepLobbyPlatter(roster, dtMs, false);
     } else if (screen === ScreenId.Results) {
-      this.updateResultsUi(nowMs);
+      this.updateResultsUi(now);
     }
 
-    if (this.auctioneerBanner !== null && nowMs >= this.bannerExpiryMs) this.auctioneerBanner = null;
+    if (this.auctioneerBanner !== null && now >= this.bannerExpiryMs) this.auctioneerBanner = null;
     const aspect = Math.max(0.35, this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight));
     this.camera.update(this.renderer.camera, this.renderFighters, this.renderIsland.arenaId, dtMs / 1000, aspect);
     const isLobby = roster.phase === RoomPhase.Lobby || roster.phase === RoomPhase.Countdown;
     const finishBySlot = new Map<number, GlazeFinish>();
+    const colourIndexBySlot = new Map<number, number>();
+    for (const sl of roster.slots) colourIndexBySlot.set(sl.slot, sl.colourIndex);
     const lSlot = this.localSlot();
     if (lSlot >= 0) finishBySlot.set(lSlot, this.equippedFinish);
     const showSelfMarker = lSlot >= 0 && this.smokeBotsCount === 0 && (screen === ScreenId.Lobby || screen === ScreenId.Hud);
     this.renderer.render({
       fighters: this.renderFighters, island: this.renderIsland, worldGadgets: this.renderGadgets,
       projectiles: this.renderProjectiles,
-      isLobby, readyPlatterActive: isLobby && this.platterHoldTicks > 0, finishBySlot,
+      isLobby, readyPlatterActive: isLobby && this.platterHoldTicks > 0, finishBySlot, colourIndexBySlot,
       ...(showSelfMarker ? { localSlot: lSlot } : {}),
     }, dtMs / 1000);
 
@@ -1077,12 +1164,13 @@ export class BricABrawlApp {
       document.getElementById('boot')?.classList.add('hidden');
     }
     if (screen === ScreenId.Hud) this.updateHudUi(sampled.tick);
-    if (this.quality.recordFrame(rawDtMs, performance.now() - scriptStart)) this.renderer.setQuality(this.quality.getTier(), this.quality.getRenderScale());
+    const scriptMs = Math.max(0, performance.now() - scriptStart);
+    if (this.quality.recordFrame(rawDtMs, scriptMs)) this.renderer.setQuality(this.quality.getTier(), this.quality.getRenderScale());
     if (this.quality.hasPendingTierDrop() && isLobby) this.renderer.setQuality(this.quality.applyPendingTierDrop(), this.quality.getRenderScale());
     this.rafId = requestAnimationFrame((n) => this.frameLoop(n));
   }
 
-  private stepLobbyPlatter(roster: RoomRosterData, dtMs: number): void {
+  private stepLobbyPlatter(roster: RoomRosterData, dtMs: number, authoritative = true): void {
     const humans = roster.slots.filter((s) => s.status !== SlotStatus.Bot && s.status !== SlotStatus.Spectating);
     const onPlatter = new Set<number>();
     for (const s of humans) {
@@ -1093,7 +1181,7 @@ export class BricABrawlApp {
     const allReady = humans.length > 0 && onPlatter.size === humans.length && roster.slots.length >= 2;
     this.platterHoldTicks = allReady ? this.platterHoldTicks + Math.max(1, Math.round(dtMs / (DT * 1000))) : 0;
     if (!prevReady && this.platterHoldTicks > 0) this.audio.play(SoundId.PlatterOn);
-    if (this.platterHoldTicks >= PLATTER_TICKS) {
+    if (authoritative && this.platterHoldTicks >= PLATTER_TICKS) {
       this.platterHoldTicks = 0;
       this.countdownAccumMs = 0;
       this.lastCountdownSec = -1;
@@ -1126,19 +1214,26 @@ export class BricABrawlApp {
     const giltMax = getGameData().tuning.gilt.max;
     const allowMotionSfx = this.ui.getScreen() === ScreenId.Lobby || this.ui.getScreen() === ScreenId.Hud;
     const pal = getGameData().palette;
+    const rosterSlots = this.roster().slots;
+
+    const applyLocalPredicted = (t: FighterRuntime, pf: FighterRuntime): void => {
+      Object.assign(t, {
+        x: pf.x + visOff.x, y: pf.y + visOff.y, vx: pf.vx + pf.kbVx, vy: pf.vy + pf.kbVy,
+        state: pf.state, stateFrame: pf.stateFrame, activeMove: pf.activeMove, moveFrame: pf.moveFrame,
+        flags: pf.flags, damage: pf.damage, guardHp: pf.guardHp, gilt: pf.gilt, stocks: pf.stocks,
+        heldGadget: pf.heldGadget, heldGadgetAmmo: pf.heldGadgetAmmo, nestaSize: pf.nestaSize,
+        hitstopFrames: pf.hitstopFrames,
+        invulnFrames: (pf.flags & FighterFlag.Invuln) !== 0 ? 1 : 0, teaspoonX: pf.x,
+      });
+    };
+
+    let updatedLocal = false;
     for (const sf of sampled.fighters) {
       const t = this.renderFighters.find((f) => f.slot === sf.slot);
       if (!t) continue;
       if (pred !== null && sf.slot === pred.localSlot) {
-        const pf = pred.fighter;
-        Object.assign(t, {
-          x: pf.x + visOff.x, y: pf.y + visOff.y, vx: pf.vx + pf.kbVx, vy: pf.vy + pf.kbVy,
-          state: pf.state, stateFrame: pf.stateFrame, activeMove: pf.activeMove, moveFrame: pf.moveFrame,
-          flags: pf.flags, damage: pf.damage, guardHp: pf.guardHp, gilt: pf.gilt, stocks: pf.stocks,
-          heldGadget: pf.heldGadget, heldGadgetAmmo: pf.heldGadgetAmmo, nestaSize: pf.nestaSize,
-          hitstopFrames: pf.hitstopFrames,
-          invulnFrames: (pf.flags & FighterFlag.Invuln) !== 0 ? 1 : 0, teaspoonX: pf.x,
-        });
+        applyLocalPredicted(t, pred.fighter);
+        updatedLocal = true;
       } else {
         Object.assign(t, {
           x: sf.x, y: sf.y, vx: sf.vx, vy: sf.vy, state: sf.state, stateFrame: sf.stateFrame,
@@ -1157,7 +1252,9 @@ export class BricABrawlApp {
       }
       this.prevDamageBySlot.set(t.slot, t.damage);
 
-      const liveryHex = pal.players[t.slot % pal.players.length]!.hex;
+      const sl = rosterSlots.find((s) => s.slot === t.slot);
+      const colIdx = Math.abs(sl ? sl.colourIndex : t.slot) % pal.players.length;
+      const liveryHex = pal.players[colIdx]!.hex;
       this.combatFeel.updateFighter(t, liveryHex, allowMotionSfx, this.renderer.vfx, this.audio);
 
       const pan = Math.max(-0.6, Math.min(0.6, t.x / 12));
@@ -1168,6 +1265,18 @@ export class BricABrawlApp {
         this.prevGiltFullBySlot.delete(t.slot);
       }
     }
+
+    // Apply immediate local client prediction even before the first matching-epoch snapshot arrives.
+    if (pred !== null && !updatedLocal) {
+      const localRender = this.renderFighters.find((f) => f.slot === pred.localSlot);
+      if (localRender) {
+        applyLocalPredicted(localRender, pred.fighter);
+        const sl = rosterSlots.find((s) => s.slot === localRender.slot);
+        const colIdx = Math.abs(sl ? sl.colourIndex : localRender.slot) % pal.players.length;
+        this.combatFeel.updateFighter(localRender, pal.players[colIdx]!.hex, allowMotionSfx, this.renderer.vfx, this.audio);
+      }
+    }
+
     for (const sc of sampled.chunks) {
       const t = this.renderIsland.chunks[sc.index];
       if (t) Object.assign(t, { x: sc.x, y: sc.y, angle: sc.angle, vx: sc.vx, vy: sc.vy, state: sc.state, resting: sc.resting });
@@ -1230,16 +1339,27 @@ export class BricABrawlApp {
   private selectFighter(fighterId: FighterId): void {
     this.profileFighter = fighterId;
     this.updateProfile({ lastFighter: fighterId });
-    if (!this.isAuthHost()) return;
+    if (this.session) {
+      this.session.updateProfile({ fighterId });
+      return;
+    }
     const r = this.roster();
-    this.commitHostRoster({ ...r, slots: r.slots.map((s) => (s.peerId === this.selfPeerId() ? { ...s, fighterId } : s)) });
-    if (r.phase === RoomPhase.Lobby) this.startWorkerSaucer();
+    const cur = r.slots.find((s) => s.peerId === this.selfPeerId());
+    if (!cur || cur.fighterId === fighterId) return;
+    this.commitHostRoster(
+      { ...r, slots: r.slots.map((s) => (s.peerId === this.selfPeerId() ? { ...s, fighterId } : s)) },
+      r.phase === RoomPhase.Lobby,
+    );
+    this.ensureHostSaucerSynced();
   }
 
   private selectColour(colourIndex: number): void {
     this.profileColour = colourIndex;
     this.updateProfile({ lastColorIndex: colourIndex });
-    if (!this.isAuthHost()) return;
+    if (this.session) {
+      this.session.updateProfile({ colourIndex });
+      return;
+    }
     const r = this.roster();
     this.commitHostRoster({ ...r, slots: r.slots.map((s) => (s.peerId === this.selfPeerId() ? { ...s, colourIndex } : s)) });
   }
@@ -1265,9 +1385,12 @@ export class BricABrawlApp {
 
   private addBot(kind: BotKind): void {
     if (!this.isAuthHost()) return;
+    const prevLen = this.roster().slots.length;
     this.addBotToRoster(kind);
-    this.commitHostRoster(this.roster());
-    if (this.roster().phase === RoomPhase.Lobby) this.startWorkerSaucer();
+    const r = this.roster();
+    if (r.slots.length === prevLen) return;
+    this.commitHostRoster(r, r.phase === RoomPhase.Lobby);
+    this.ensureHostSaucerSynced();
   }
 
   private removeBot(): void {
@@ -1277,8 +1400,8 @@ export class BricABrawlApp {
     const last = bots[bots.length - 1];
     if (!last) return;
     this.botKinds.delete(last.slot);
-    this.commitHostRoster({ ...r, slots: r.slots.filter((s) => s.slot !== last.slot) });
-    if (r.phase === RoomPhase.Lobby) this.startWorkerSaucer();
+    this.commitHostRoster({ ...r, slots: r.slots.filter((s) => s.slot !== last.slot) }, r.phase === RoomPhase.Lobby);
+    this.ensureHostSaucerSynced();
   }
 
   private askPeerToHost(peerId: string): void {
@@ -1460,6 +1583,10 @@ export class BricABrawlApp {
       get screen() { return app.ui.getScreen(); },
       get phase() { return app.roster().phase; },
       get tick() { return app.lastSnapTick; },
+      get matchEpoch() { return app.activeMatchEpoch; },
+      get localSlot() { return app.localSlot(); },
+      get isHost() { return app.isAuthHost(); },
+      get roomCode() { return app.roomCode; },
       get peerCount() { return app.transport ? app.transport.getPeerIds().length : 0; },
       get snapshotsReceived() { return app.snapshotsReceived; },
       get maxSnapshotGapMs() { return app.maxSnapshotGapMs; },
@@ -1472,6 +1599,20 @@ export class BricABrawlApp {
       get reduceFlashes() { return app.reduceFlashes; },
       get audioState() { return app.audio.getAudioContextState(); },
       get lastInputMask() { return app.lastInputMask; },
+      get fightersState() {
+        return app.renderFighters.map((f) => ({
+          slot: f.slot,
+          id: f.id,
+          x: f.x,
+          y: f.y,
+          vx: f.vx,
+          vy: f.vy,
+          state: f.state,
+          activeMove: f.activeMove,
+          damage: f.damage,
+          stocks: f.stocks,
+        }));
+      },
       get localFighterState() {
         const lf = app.renderFighters.find((f) => f.slot === app.localSlot());
         if (!lf) return null;
@@ -1484,6 +1625,7 @@ export class BricABrawlApp {
           y: lf.y,
         };
       },
+      getTransportDiagnostics: () => (app.transport ? app.transport.getDiagnostics() : Promise.resolve(null)),
       resetSnapshotGap: () => { app.maxSnapshotGapMs = 0; app.lastSnapshotArrivalMs = performance.now(); },
       setReduceFlashes: (r: boolean) => { app.reduceFlashes = r; app.renderer.vfx.setReduceFlashes(r); },
       startRoundNow: () => app.startRoundNow(),

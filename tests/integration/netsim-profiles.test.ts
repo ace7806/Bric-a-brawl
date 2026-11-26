@@ -42,6 +42,7 @@ const PROFILE_ROWS: readonly ProfileThreshold[] = [
 function buildWireSnapshot(projCount: number, chunkCount: number, rubbleCount: number, gadgetCount: number, hasWorld: boolean): SnapshotData {
   return {
     tick: 43210,
+    epoch: 1,
     lastAppliedInputTicks: Array.from({ length: 8 }, (_, i) => 43200 + i),
     fighters: Array.from({ length: 8 }, (_, slot) => ({
       slot,
@@ -164,7 +165,7 @@ describe('Netsim profiles N1-N11 & bandwidth budgets (M2.6, M2.7, M2.8)', () => 
   });
 
   it('matches 7.3.7 typical & worst-case wire rates within 15% and respects client/host budgets (M2.8)', () => {
-    const inputBytes = encodeInputPacket({ tick: 500, masks: [0x0143, 0x0043, 0x0003, 0], lastSnapshotTick: 498 });
+    const inputBytes = encodeInputPacket({ tick: 500, masks: [0x0143, 0x0043, 0x0003, 0], lastSnapshotTick: 498, epoch: 1 });
     const fOnly = encodeSnapshot(buildWireSnapshot(4, 0, 0, 0, false), false);
     const typWorld = encodeSnapshot(buildWireSnapshot(4, 2, 6, 3, true), true);
     const worstFOnly = encodeSnapshot(buildWireSnapshot(12, 0, 0, 0, false), false);

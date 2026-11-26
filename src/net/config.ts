@@ -14,13 +14,13 @@ export const STUN_SERVERS: readonly RTCIceServer[] = [
 
 export const NOSTR_RELAYS: readonly string[] = [
   'wss://fanfares.nostr1.com',
-  'wss://nostr.wine',
+  'wss://relay.primal.net',
   'wss://no.str.cr',
   'wss://nos.lol',
   'wss://bucket.coracle.social',
 ];
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const BUILD_ID = '0.1.0';
 export const APP_ID = 'bric-a-brawl-v1';
 

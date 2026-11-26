@@ -175,6 +175,7 @@ describe('Smash Game Feel — Input Responsiveness, Sim Combat & Hitstop Sync', 
 
     const snap: SnapshotData = {
       tick: 50,
+      epoch: 0,
       lastAppliedInputTicks: [50, 50],
       fighters: [
         makeSnap({ slot: 0, state: FighterState.Attack, stateFrame: 8, activeMove: MoveId.Fheavy, hitstopFrames: 6 }),

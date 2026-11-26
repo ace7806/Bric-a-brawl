@@ -54,6 +54,7 @@ const arbSnapshot: fc.Arbitrary<SnapshotData> = fc
         state: enumRange(WorldGadgetState.Parcel, WorldGadgetState.Thrown), ammo: fc.integer({ min: 0, max: 15 }),
       }))),
       hasWorld: fc.constant(true),
+      epoch: fc.integer({ min: 0, max: 0xffff }),
     }),
   );
 
@@ -90,7 +91,7 @@ describe('fast-check property invariants', () => {
 
   it('3a. InputPacket wire codec round-trips bit-exact with NetMessageKind.Input', () => {
     const u16 = fc.integer({ min: 0, max: 0xffff });
-    const arbPkt: fc.Arbitrary<InputPacket> = fc.record({ tick: u16, masks: fc.tuple(u16, u16, u16, u16), lastSnapshotTick: u16 });
+    const arbPkt: fc.Arbitrary<InputPacket> = fc.record({ tick: u16, masks: fc.tuple(u16, u16, u16, u16), lastSnapshotTick: u16, epoch: u16 });
     fc.assert(
       fc.property(arbPkt, (pkt) => {
         const bytes = encodeInputPacket(pkt);
@@ -111,10 +112,12 @@ describe('fast-check property invariants', () => {
         expect(peekUnreliableKind(bytes)).toBe(NetMessageKind.Snapshot);
         const dec = decodeSnapshot(bytes);
         expect(dec.tick).toBe(snap.tick);
+        expect(dec.epoch).toBe(snap.epoch);
         expect(dec.lastAppliedInputTicks).toEqual(snap.lastAppliedInputTicks);
         expect(dec.fighters.length).toBe(snap.fighters.length);
         dec.fighters.forEach((df, i) => {
           const sf = snap.fighters[i]!;
+          expect(df.slot).toBe(sf.slot);
           expect(Math.abs(df.x - sf.x)).toBeLessThanOrEqual(posTol);
           expect(Math.abs(df.y - sf.y)).toBeLessThanOrEqual(posTol);
           expect(Math.abs(df.vx - sf.vx)).toBeLessThanOrEqual(velTol);
@@ -167,7 +170,7 @@ describe('fast-check property invariants', () => {
         for (let t = 0; t < drops.length + 6; t++) {
           if (t < drops.length && !drops[t]) {
             const m = (k: number): number => (k >= 0 ? (seq[k] ?? 0) : 0);
-            buf.ingestPacket(0, { tick: t & 0xffff, masks: [m(t), m(t - 1), m(t - 2), m(t - 3)], lastSnapshotTick: 0 }, t);
+            buf.ingestPacket(0, { tick: t & 0xffff, masks: [m(t), m(t - 1), m(t - 2), m(t - 3)], lastSnapshotTick: 0, epoch: 0 }, t);
           }
           const res = buf.popInputForTick(0, t);
           if (res.inputTick > lastTick) {

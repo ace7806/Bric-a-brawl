@@ -105,6 +105,7 @@ export interface RenderFrameInput {
   readonly isLobby: boolean;
   readonly readyPlatterActive: boolean;
   readonly finishBySlot?: ReadonlyMap<number, GlazeFinish>;
+  readonly colourIndexBySlot?: ReadonlyMap<number, number>;
   readonly localSlot?: number;
 }
 
@@ -609,10 +610,11 @@ export class GreyboxRenderer {
     disposeObjectTree(rig.group);
   }
 
-  private ensureFighterRig(f: FighterRuntime, finish: GlazeFinish): FighterMeshRig {
+  private ensureFighterRig(f: FighterRuntime, finish: GlazeFinish, colourIndex?: number): FighterMeshRig {
     assert(this.assets !== null, ErrorCode.InvariantViolation, 'ensureFighterRig called before initAssets()');
     const pal = getGameData().palette;
-    const liveryHex = pal.players[f.slot % pal.players.length]!.hex;
+    const colIdx = Math.abs(colourIndex ?? f.slot) % pal.players.length;
+    const liveryHex = pal.players[colIdx]!.hex;
     const existing = this.fighterRigs.get(f.slot);
     if (
       existing &&
@@ -816,7 +818,8 @@ export class GreyboxRenderer {
       const f = input.fighters[i]!;
       const finish =
         input.finishBySlot?.get(f.slot) ?? this.localFinishBySlot.get(f.slot) ?? GlazeFinish.Standard;
-      const rig = this.ensureFighterRig(f, finish);
+      const colourIndex = input.colourIndexBySlot?.get(f.slot);
+      const rig = this.ensureFighterRig(f, finish, colourIndex);
       const isTeaspoon = f.state === FighterState.Teaspoon;
       const isEliminated = f.state === FighterState.Eliminated;
 

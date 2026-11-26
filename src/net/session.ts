@@ -62,6 +62,7 @@ export function createInitialRoster(
 ): RoomRosterData {
   return {
     version: 1,
+    matchEpoch: 1,
     hostId,
     phase: RoomPhase.Lobby,
     arenaId,
@@ -127,7 +128,7 @@ export function selectEmergencyHost(
 
 export class RoomSession {
   public readonly transport: Transport;
-  private readonly profile: LocalProfile;
+  private profile: LocalProfile;
   private readonly events: SessionEvents;
   private readonly hostMetrics = new Map<string, HostCandidateMetric>();
   private readonly unsubs: (() => void)[] = [];
@@ -150,6 +151,7 @@ export class RoomSession {
       ? (initialRoster ?? createInitialRoster(transport.selfId, profile))
       : {
           version: 0,
+          matchEpoch: 0,
           hostId: '',
           phase: RoomPhase.Lobby,
           arenaId: ArenaId.Willow,
@@ -201,19 +203,61 @@ export class RoomSession {
     });
   }
 
+  public updateProfile(patch: Partial<LocalProfile>): void {
+    this.profile = { ...this.profile, ...patch };
+    if (this.isHost) {
+      const existing = this.roster.slots.find((s) => s.peerId === this.transport.selfId);
+      if (!existing) return;
+      const fighterChanged = existing.fighterId !== this.profile.fighterId;
+      const changed =
+        fighterChanged ||
+        existing.name !== this.profile.name ||
+        existing.colourIndex !== this.profile.colourIndex;
+      if (!changed) return;
+      const nextSlots = this.roster.slots.map((s) =>
+        s.peerId === this.transport.selfId
+          ? { ...s, name: this.profile.name, fighterId: this.profile.fighterId, colourIndex: this.profile.colourIndex }
+          : s,
+      );
+      const bumpEpoch = fighterChanged && existing.status !== SlotStatus.Spectating && this.roster.phase === RoomPhase.Lobby;
+      this.commitRoster({ ...this.roster, slots: nextSlots }, bumpEpoch);
+    } else if (this.roster.hostId) {
+      this.sendHello(this.roster.hostId);
+    } else {
+      this.broadcastHello();
+    }
+  }
+
+  public updateRoster(next: RoomRosterData, bumpMatchEpoch = false): RoomRosterData {
+    assert(this.isHost, ErrorCode.InvariantViolation, 'Only host can mutate roster');
+    return this.commitRoster(next, bumpMatchEpoch);
+  }
+
   public setPhase(phase: RoomPhase, roundSeed?: number, arenaId?: ArenaId): void {
     assert(this.isHost, ErrorCode.InvariantViolation, 'Only host can mutate phase');
     let nextSlots = this.roster.slots;
+    let promoted = false;
     if (phase === RoomPhase.Lobby || phase === RoomPhase.Countdown) {
+      const beforeSpec = nextSlots.filter((s) => s.status === SlotStatus.Spectating).length;
       nextSlots = this.promoteSpectators(nextSlots);
+      promoted = nextSlots.filter((s) => s.status === SlotStatus.Spectating).length !== beforeSpec;
     }
-    this.commitRoster({
-      ...this.roster,
-      phase,
-      arenaId: arenaId ?? this.roster.arenaId,
-      roundSeed: roundSeed ?? this.roster.roundSeed,
-      slots: nextSlots,
-    });
+    const seedChanged = roundSeed !== undefined && roundSeed !== this.roster.roundSeed;
+    const bumpEpoch =
+      promoted ||
+      phase === RoomPhase.Round ||
+      seedChanged ||
+      (phase === RoomPhase.Lobby && this.roster.phase !== RoomPhase.Lobby);
+    this.commitRoster(
+      {
+        ...this.roster,
+        phase,
+        arenaId: arenaId ?? this.roster.arenaId,
+        roundSeed: roundSeed ?? this.roster.roundSeed,
+        slots: nextSlots,
+      },
+      bumpEpoch,
+    );
   }
 
   public awardWin(winnerSlot: number): void {
@@ -276,6 +320,7 @@ export class RoomSession {
     const nextRoster: RoomRosterData = {
       ...this.roster,
       version: this.roster.version + 1,
+      matchEpoch: this.roster.matchEpoch + 1,
       hostId: newHostId,
       phase: RoomPhase.Lobby,
       slots: this.promoteSpectators(this.roster.slots),
@@ -317,9 +362,13 @@ export class RoomSession {
       return;
     }
     if (this.isHost) {
+      const departed = this.roster.slots.find((s) => s.peerId === peerId);
       const nextSlots = this.roster.slots.filter((s) => s.peerId !== peerId);
-      if (nextSlots.length !== this.roster.slots.length) {
-        this.commitRoster({ ...this.roster, slots: nextSlots });
+      if (departed !== undefined && nextSlots.length !== this.roster.slots.length) {
+        const bumpEpoch =
+          departed.status !== SlotStatus.Spectating &&
+          (this.roster.phase === RoomPhase.Lobby || this.roster.phase === RoomPhase.Countdown);
+        this.commitRoster({ ...this.roster, slots: nextSlots }, bumpEpoch);
       }
     }
   }
@@ -352,6 +401,7 @@ export class RoomSession {
     const nextRoster: RoomRosterData = {
       ...this.roster,
       version: this.roster.version + 1,
+      matchEpoch: this.roster.matchEpoch + 1,
       hostId: chosen.peerId,
       phase: RoomPhase.Lobby,
       slots: remainingSlots,
@@ -390,7 +440,14 @@ export class RoomSession {
       case NetMessageKind.Roster:
         if (msg.roster.version >= this.roster.version) {
           const prevHost = this.roster.hostId;
+          const hadSelfSlot = this.roster.slots.some((s) => s.peerId === this.transport.selfId);
           this.roster = msg.roster;
+          if (!this.isHost && !hadSelfSlot) {
+            const selfSlot = msg.roster.slots.find((s) => s.peerId === this.transport.selfId);
+            if (selfSlot) {
+              this.profile = { ...this.profile, colourIndex: selfSlot.colourIndex };
+            }
+          }
           this.events.onRosterChange?.(msg.roster);
           if (prevHost && prevHost !== msg.roster.hostId) {
             this.events.onHostChanged?.(msg.roster.hostId, prevHost);
@@ -418,7 +475,27 @@ export class RoomSession {
       return;
     }
     if (!this.isHost) return;
-    if (this.roster.slots.some((s) => s.peerId === peerId)) return;
+    const existing = this.roster.slots.find((s) => s.peerId === peerId);
+    if (existing !== undefined) {
+      if (this.roster.phase === RoomPhase.Lobby || this.roster.phase === RoomPhase.Results) {
+        const fighterChanged = existing.fighterId !== msg.fighterId;
+        const changed =
+          fighterChanged ||
+          existing.name !== msg.name ||
+          existing.colourIndex !== msg.colourIndex;
+        if (changed) {
+          const nextSlots = this.roster.slots.map((s) =>
+            s.peerId === peerId
+              ? { ...s, name: msg.name, fighterId: msg.fighterId, colourIndex: msg.colourIndex }
+              : s,
+          );
+          const bumpEpoch =
+            fighterChanged && existing.status !== SlotStatus.Spectating && this.roster.phase === RoomPhase.Lobby;
+          this.commitRoster({ ...this.roster, slots: nextSlots }, bumpEpoch);
+        }
+      }
+      return;
+    }
     const used = new Set(this.roster.slots.map((s) => s.slot));
     const isRoundActive = this.roster.phase === RoomPhase.Round || this.roster.phase === RoomPhase.Countdown;
     const minSlot = isRoundActive ? MAX_FIGHTER_SLOTS : 0;
@@ -433,17 +510,30 @@ export class RoomSession {
       this.sendReliable(peerId, { kind: NetMessageKind.Bye, reason: ByeReason.RoomFull });
       return;
     }
+    const usedColours = new Set(this.roster.slots.map((s) => s.colourIndex));
+    let assignedColour = msg.colourIndex;
+    if (usedColours.has(assignedColour)) {
+      for (let c = 0; c < MAX_FIGHTER_SLOTS; c++) {
+        if (!usedColours.has(c)) {
+          assignedColour = c;
+          break;
+        }
+      }
+    }
     const newSlot: RoomSlotData = {
       slot: freeSlot,
       peerId,
       name: msg.name,
       fighterId: msg.fighterId,
-      colourIndex: msg.colourIndex,
+      colourIndex: assignedColour,
       team: TeamId.None,
       wins: 0,
       status: isRoundActive ? SlotStatus.Spectating : SlotStatus.Connected,
     };
-    this.commitRoster({ ...this.roster, slots: [...this.roster.slots, newSlot].sort((a, b) => a.slot - b.slot) });
+    this.commitRoster(
+      { ...this.roster, slots: [...this.roster.slots, newSlot].sort((a, b) => a.slot - b.slot) },
+      !isRoundActive,
+    );
   }
 
   private handleHostMessage(peerId: string, msg: Extract<ReliableNetMessage, { kind: NetMessageKind.Host }>): void {
@@ -471,6 +561,7 @@ export class RoomSession {
           this.roster = {
             ...this.roster,
             version: this.roster.version + 1,
+            matchEpoch: this.roster.matchEpoch + 1,
             hostId: msg.targetPeerId,
             phase: RoomPhase.Lobby,
             slots: this.promoteSpectators(this.roster.slots),
@@ -502,11 +593,17 @@ export class RoomSession {
     });
   }
 
-  private commitRoster(next: RoomRosterData): void {
-    const versioned: RoomRosterData = { ...next, version: this.roster.version + 1 };
+  private commitRoster(next: RoomRosterData, bumpMatchEpoch = false): RoomRosterData {
+    const baseEpoch = Math.max(this.roster.matchEpoch, next.matchEpoch);
+    const versioned: RoomRosterData = {
+      ...next,
+      version: this.roster.version + 1,
+      matchEpoch: bumpMatchEpoch ? baseEpoch + 1 : baseEpoch,
+    };
     this.roster = versioned;
     this.broadcastReliable({ kind: NetMessageKind.Roster, roster: versioned });
     this.events.onRosterChange?.(versioned);
+    return versioned;
   }
 
   private setState(state: ConnectionState, reason?: ByeReason): void {
